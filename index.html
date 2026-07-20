@@ -89,10 +89,10 @@
                 </div>
             </div>
 
-            <!-- Chart: Daily Trend -->
+            <!-- Chart: Daily Trend (Stacked) -->
             <div class="glass-card rounded-2xl p-5">
                 <h3 class="text-md font-medium mb-4">รายจ่ายรายวัน (บาท)</h3>
-                <div class="relative h-48 w-full">
+                <div class="relative h-64 w-full"> <!-- เพิ่มความสูงเล็กน้อยให้เห็นสัปดาห์ชัดเจน -->
                     <canvas id="dailyChart"></canvas>
                 </div>
             </div>
@@ -313,10 +313,15 @@
             let totalIncome = 0;
             let totalExpense = 0;
             let categoryTotals = {};
-            let dailyTotals = {};
-            let monthlyTransactions = []; // ตัวแปรเก็บรายการสำหรับเดือนนี้
-
+            
+            // เปลี่ยนมาเก็บยอดใช้จ่ายรายวัน "แยกตามหมวดหมู่"
+            let dailyCategoryTotals = {};
             const daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
+            for (let i = 1; i <= daysInMonth; i++) {
+                dailyCategoryTotals[i] = {};
+            }
+
+            let monthlyTransactions = []; 
 
             allData.forEach(row => {
                 const rowDate = new Date(row.date);
@@ -334,7 +339,7 @@
                         categoryTotals[row.category] = (categoryTotals[row.category] || 0) + amt;
                         
                         const day = rowDate.getDate();
-                        dailyTotals[day] = (dailyTotals[day] || 0) + amt;
+                        dailyCategoryTotals[day][row.category] = (dailyCategoryTotals[day][row.category] || 0) + amt;
                     }
                 }
             });
@@ -371,21 +376,26 @@
                 balanceIconEl.innerHTML = '<i class="fa-solid fa-equals"></i>';
             }
 
-            renderDonutChart(categoryTotals, totalExpense);
-            renderBarChart(dailyTotals, daysInMonth);
+            // จัดเรียงหมวดหมู่และผูกสี (Color Mapping) เพื่อให้กราฟโดนัทและกราฟแท่งใช้สีเดียวกัน
+            const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+            const colorPalette = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#84cc16'];
+            
+            const categoryColors = {};
+            sortedCategories.forEach((item, index) => {
+                categoryColors[item[0]] = colorPalette[index % colorPalette.length];
+            });
+
+            renderDonutChart(sortedCategories, totalExpense, categoryColors);
+            renderBarChart(dailyCategoryTotals, daysInMonth, filterYear, filterMonth, categoryColors, sortedCategories);
             renderTransactionDetails(monthlyTransactions); 
         }
 
-        function renderDonutChart(categoryTotals, totalExpense) {
+        function renderDonutChart(sortedCategories, totalExpense, categoryColors) {
             const ctx = document.getElementById('expenseChart').getContext('2d');
             
-            const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
             const labels = sortedCategories.map(item => item[0]);
             const dataValues = sortedCategories.map(item => item[1]);
-
-            // รองรับสีมากขึ้นสำหรับหมวดหมู่ที่เพิ่มเข้ามา
-            const colorPalette = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#84cc16'];
-            const backgroundColors = dataValues.map((_, index) => colorPalette[index % colorPalette.length]);
+            const backgroundColors = labels.map(label => categoryColors[label]);
 
             const listContainer = document.getElementById('categoryList');
             listContainer.innerHTML = '';
@@ -393,11 +403,11 @@
             if (sortedCategories.length === 0) {
                 listContainer.innerHTML = '<p class="text-center text-sm text-gray-400 py-4">ไม่มีข้อมูลรายจ่ายในเดือนนี้</p>';
             } else {
-                sortedCategories.forEach((item, index) => {
+                sortedCategories.forEach((item) => {
                     const catName = item[0];
                     const amount = item[1];
                     const percent = totalExpense > 0 ? ((amount / totalExpense) * 100).toFixed(1) : 0;
-                    const color = colorPalette[index % colorPalette.length]; 
+                    const color = categoryColors[catName]; 
                     
                     listContainer.innerHTML += `
                         <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
@@ -442,11 +452,32 @@
             });
         }
 
-        function renderBarChart(dailyTotals, daysInMonth) {
+        function renderBarChart(dailyCategoryTotals, daysInMonth, filterYear, filterMonth, categoryColors, sortedCategories) {
             const ctx = document.getElementById('dailyChart').getContext('2d');
             
-            const labels = Array.from({length: daysInMonth}, (_, i) => i + 1);
-            const dataValues = labels.map(day => dailyTotals[day] || 0);
+            // สร้าง Label แกน X เป็น 2 บรรทัด (วันที่ และ สัปดาห์)
+            const labels = Array.from({length: daysInMonth}, (_, i) => {
+                const day = i + 1;
+                // คำนวณสัปดาห์ของเดือน
+                const firstDayOfMonth = new Date(filterYear, filterMonth - 1, 1).getDay();
+                const weekNum = Math.ceil((day + firstDayOfMonth) / 7);
+                // ส่งเป็น Array เพื่อให้ Chart.js ปัดขึ้นบรรทัดใหม่
+                return [day.toString(), `W${weekNum}`]; 
+            });
+
+            // สร้าง Datasets แยกตามหมวดหมู่ (ทำ Stack)
+            const datasets = sortedCategories.map(catItem => {
+                const catName = catItem[0];
+                const dataValues = Array.from({length: daysInMonth}, (_, i) => dailyCategoryTotals[i + 1][catName] || 0);
+
+                return {
+                    label: catName,
+                    data: dataValues,
+                    backgroundColor: categoryColors[catName],
+                    borderWidth: 0,
+                    barPercentage: 0.8
+                };
+            });
 
             if (barChartInstance) barChartInstance.destroy();
 
@@ -454,27 +485,40 @@
                 type: 'bar',
                 data: {
                     labels: labels,
-                    datasets: [{
-                        label: 'รายจ่าย (บาท)',
-                        data: dataValues,
-                        backgroundColor: '#3b82f6', 
-                        borderRadius: 4,
-                        barPercentage: 0.8
-                    }]
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { title: (ctx) => `วันที่ ${ctx[0].label}`, label: (ctx) => `฿${ctx.raw.toLocaleString()}` } }
+                        tooltip: { 
+                            mode: 'index', // เวลาชี้ให้แสดงหมวดหมู่ทั้งหมดในวันนั้น
+                            intersect: false,
+                            callbacks: { 
+                                title: (ctx) => `วันที่ ${ctx[0].label[0]} (สัปดาห์ที่ ${ctx[0].label[1].replace('W', '')})`,
+                                label: (ctx) => {
+                                    // ซ่อนค่าที่เป็น 0 จาก Tooltip
+                                    if (ctx.raw > 0) {
+                                        return `${ctx.dataset.label}: ฿${ctx.raw.toLocaleString()}`;
+                                    }
+                                    return null; 
+                                }
+                            } 
+                        }
                     },
                     scales: {
                         x: {
+                            stacked: true, // เปิดโหมด Stack
                             grid: { display: false },
-                            ticks: { maxTicksLimit: 10, font: { size: 10 } }
+                            ticks: { 
+                                maxTicksLimit: 31, 
+                                font: { size: 10 },
+                                color: '#6b7280' // สีเทาให้ดูไม่รก
+                            }
                         },
                         y: {
+                            stacked: true, // เปิดโหมด Stack
                             beginAtZero: true,
                             grid: { color: '#f3f4f6' },
                             border: { display: false },
