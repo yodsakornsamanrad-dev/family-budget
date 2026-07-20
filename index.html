@@ -14,9 +14,10 @@
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #fafafa; }
         .glass-card { background: #ffffff; border: 1px solid #f0f0f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02); }
-        /* ซ่อน scrollbar สำหรับเนื้อหาที่ยาว */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background-color: #e5e7eb; border-radius: 10px; }
+        /* เอฟเฟกต์ตอนกดรายการ */
+        .transaction-row:active { transform: scale(0.99); }
     </style>
 </head>
 <body class="text-gray-800 antialiased pb-20">
@@ -32,7 +33,7 @@
         <!-- Tab Navigation -->
         <div class="flex bg-gray-100 p-1 rounded-xl mb-6 shadow-inner">
             <button onclick="switchTab('dashboard')" id="tab-dashboard" class="flex-1 py-2 rounded-lg text-sm font-medium transition-all bg-white shadow-sm text-black">Dashboard</button>
-            <button onclick="switchTab('add')" id="tab-add" class="flex-1 py-2 rounded-lg text-sm font-medium text-gray-500 transition-all hover:text-black">เพิ่มรายการ</button>
+            <button onclick="switchTab('add')" id="tab-add" class="flex-1 py-2 rounded-lg text-sm font-medium text-gray-500 transition-all hover:text-black">เพิ่ม/แก้ไขรายการ</button>
         </div>
 
         <!-- ================= DASHBOARD VIEW ================= -->
@@ -66,7 +67,6 @@
 
             <!-- Summary Section -->
             <div>
-                <!-- รายรับ - รายจ่าย -->
                 <div class="grid grid-cols-2 gap-4 mb-4">
                     <div class="glass-card rounded-2xl p-5">
                         <p class="text-sm text-gray-500 mb-1">รายรับ</p>
@@ -103,15 +103,15 @@
                 <div class="relative h-56 w-full mb-6">
                     <canvas id="expenseChart"></canvas>
                 </div>
-                <!-- List Breakdown -->
-                <div id="categoryList" class="space-y-2">
-                    <!-- รายการจะถูกสร้างด้วย JS -->
-                </div>
+                <div id="categoryList" class="space-y-2"></div>
             </div>
 
-            <!-- Transaction Details (รายการบันทึก) -->
+            <!-- Transaction Details -->
             <div class="glass-card rounded-2xl p-5">
-                <h3 class="text-md font-medium mb-4">รายการบันทึก (เดือนนี้)</h3>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-md font-medium">รายการบันทึก (เดือนนี้)</h3>
+                    <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">แตะเพื่อแก้ไข</span>
+                </div>
                 <div id="transactionDetails" class="space-y-3">
                     <!-- รายการจะถูกสร้างด้วย JS -->
                 </div>
@@ -122,9 +122,11 @@
             </button>
         </div>
 
-        <!-- ================= ADD RECORD VIEW ================= -->
+        <!-- ================= ADD / EDIT RECORD VIEW ================= -->
         <div id="view-add" class="hidden">
             <div class="glass-card rounded-2xl p-6">
+                <h2 id="formTitle" class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">เพิ่มรายการใหม่</h2>
+                
                 <form id="recordForm" class="space-y-5">
                     
                     <div>
@@ -178,9 +180,14 @@
                         <input type="text" id="note" placeholder="เช่น ค่าทางด่วน, ข้าวมันไก่..." class="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:border-black focus:ring-1 focus:ring-black bg-gray-50">
                     </div>
 
-                    <button type="submit" id="submitBtn" class="w-full py-4 bg-black text-white font-medium rounded-xl hover:bg-gray-800 transition-all shadow-md mt-6">
-                        บันทึกข้อมูล
-                    </button>
+                    <div class="flex gap-3 mt-6">
+                        <button type="button" id="cancelEditBtn" onclick="resetFormMode()" class="hidden flex-1 py-4 bg-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-300 transition-all shadow-sm">
+                            ยกเลิก
+                        </button>
+                        <button type="submit" id="submitBtn" class="flex-[2] py-4 bg-black text-white font-medium rounded-xl hover:bg-gray-800 transition-all shadow-md">
+                            บันทึกข้อมูล
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -195,28 +202,27 @@
         let donutChartInstance = null;
         let barChartInstance = null;
         let allData = []; 
+        
+        // ตัวแปรสำหรับเช็คสถานะการแก้ไข
+        let editMode = false;
+        let editRowId = null;
 
-        // Setup Header Date
         const headerOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
         document.getElementById('currentDate').innerText = new Date().toLocaleDateString('th-TH', headerOptions);
 
-        // Setup Default Dates for Inputs
         const today = new Date();
         const localDateString = today.toLocaleDateString('en-CA'); 
         document.getElementById('recordDate').value = localDateString;
         
-        // ตั้งค่า Default ของ Dropdown เดือนและปี
         const currentMonthString = String(today.getMonth() + 1).padStart(2, '0');
         const currentYearString = today.getFullYear().toString();
         
         document.getElementById('monthSelect').value = currentMonthString;
         document.getElementById('yearSelect').value = currentYearString;
 
-        // เมื่อเปลี่ยนเดือน/ปี ให้ประมวลผลข้อมูลใหม่
         document.getElementById('monthSelect').addEventListener('change', renderDashboard);
         document.getElementById('yearSelect').addEventListener('change', renderDashboard);
 
-        // Tab Switching Logic
         function switchTab(tab) {
             if (tab === 'dashboard') {
                 document.getElementById('view-dashboard').classList.remove('hidden');
@@ -241,16 +247,57 @@
             }
         }
 
-        // Submit Form Logic
+        function resetFormMode() {
+            editMode = false;
+            editRowId = null;
+            document.getElementById('recordForm').reset();
+            document.getElementById('recordDate').value = localDateString;
+            
+            document.getElementById('formTitle').innerText = 'เพิ่มรายการใหม่';
+            document.getElementById('submitBtn').innerHTML = 'บันทึกข้อมูล';
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+        }
+
+        // ฟังก์ชันดึงข้อมูลเข้าฟอร์มเมื่อกดเลือกที่ตาราง
+        function editRecord(sheetRow) {
+            const record = allData.find(r => r.sheetRow === sheetRow);
+            if (!record) return;
+
+            // แปลงรูปแบบวันที่ให้ฟอร์มรู้จัก (YYYY-MM-DD)
+            const d = new Date(record.date);
+            document.getElementById('recordDate').value = d.toLocaleDateString('en-CA');
+            document.getElementById('type').value = record.type;
+            document.getElementById('category').value = record.category;
+            document.getElementById('amount').value = record.amount;
+            document.getElementById('user').value = record.user || 'ครอบครัว-ส่วนรวม';
+            document.getElementById('note').value = record.note || '';
+
+            // เปิดโหมดแก้ไข
+            editMode = true;
+            editRowId = sheetRow;
+            
+            document.getElementById('formTitle').innerText = `แก้ไขรายการ (แถวที่ ${sheetRow})`;
+            document.getElementById('submitBtn').innerHTML = '<i class="fa-solid fa-pen mr-2"></i>อัปเดตข้อมูล';
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+
+            switchTab('add');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // กดปุ่มบันทึก/อัปเดต
         document.getElementById('recordForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const btn = document.getElementById('submitBtn');
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังบันทึก...';
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังดำเนินการ...';
             btn.disabled = true;
 
             const selectedDate = new Date(document.getElementById('recordDate').value);
 
+            // แนบพารามิเตอร์ action ไปด้วยเพื่อให้ Google Apps Script รู้ว่าเป็นการอัปเดตหรือเพิ่มใหม่
             const data = {
+                action: editMode ? 'update' : 'add', 
+                row: editRowId, 
                 date: selectedDate.toISOString(),
                 type: document.getElementById('type').value,
                 category: document.getElementById('category').value,
@@ -265,12 +312,8 @@
             })
             .then(res => res.json())
             .then(resData => {
-                alert('บันทึกข้อมูลเรียบร้อยแล้ว!');
-                
-                document.getElementById('recordForm').reset();
-                document.getElementById('recordDate').value = localDateString;
-                
-                btn.innerHTML = 'บันทึกข้อมูล';
+                alert(editMode ? 'อัปเดตรายการเรียบร้อยแล้ว!' : 'บันทึกข้อมูลเรียบร้อยแล้ว!');
+                resetFormMode(); 
                 btn.disabled = false;
                 
                 fetchData(); 
@@ -279,15 +322,13 @@
             .catch(error => {
                 console.error('Error!', error.message);
                 alert('เกิดข้อผิดพลาด กรุณาลองใหม่');
-                btn.innerHTML = 'บันทึกข้อมูล';
+                btn.innerHTML = originalText;
                 btn.disabled = false;
             });
         });
 
-        // Fetch Data from Google Sheets
+        // ดึงข้อมูล
         function fetchData() {
-            if(SCRIPT_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') return;
-
             const btn = document.querySelector('button[onclick="fetchData()"]');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...';
@@ -295,7 +336,12 @@
             fetch(SCRIPT_URL)
                 .then(res => res.json())
                 .then(data => {
-                    allData = data; 
+                    // แนบหมายเลขแถว (Row) ของ Google Sheets ไปด้วย เพื่อใช้เป็น ID ตอนแก้ไข
+                    // สมมติว่าข้อมูลที่ส่งมาจาก GAS เริ่มต้นที่แถว 2 (แถว 1 คือ Header)
+                    allData = data.map((item, index) => {
+                        return { ...item, sheetRow: index + 2 };
+                    }); 
+                    
                     renderDashboard(); 
                     btn.innerHTML = originalText;
                 })
@@ -313,10 +359,9 @@
             let totalIncome = 0;
             let totalExpense = 0;
             let categoryTotals = {};
-            
-            // เก็บยอดใช้จ่ายรายวัน "แยกตามหมวดหมู่"
             let dailyCategoryTotals = {};
             const daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
+            
             for (let i = 1; i <= daysInMonth; i++) {
                 dailyCategoryTotals[i] = {};
             }
@@ -344,11 +389,9 @@
                 }
             });
 
-            // อัปเดตตัวเลขรายรับ-รายจ่าย
             document.getElementById('income-total').innerText = totalIncome.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2});
             document.getElementById('expense-total').innerText = totalExpense.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2});
 
-            // อัปเดตสถานะการเงิน (Net Balance)
             const netBalance = totalIncome - totalExpense;
             const balanceEl = document.getElementById('net-balance');
             const balanceCardEl = document.getElementById('balance-card');
@@ -376,20 +419,15 @@
                 balanceIconEl.innerHTML = '<i class="fa-solid fa-equals"></i>';
             }
 
-            // จัดเรียงหมวดหมู่และผูกสี (Color Mapping) โทนพาสเทล
+            // [อัปเดตสีตามรูปภาพ] 
             const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
             const colorPalette = [
-                '#FFB3BA', // Pastel Red/Pink
-                '#FFDFBA', // Pastel Orange
-                '#FFFFBA', // Pastel Yellow
-                '#BAFFC9', // Pastel Green
-                '#BAE1FF', // Pastel Blue
-                '#E2CBF7', // Pastel Purple
-                '#F3C4FB', // Pastel Magenta
-                '#C4FAF8', // Pastel Cyan
-                '#D0F4DE', // Pastel Mint
-                '#FCF6BD', // Pastel Lemon
-                '#FFC6FF'  // Pastel Lilac
+                '#008b8b', // Teal / Dark Cyan
+                '#00a8cc', // Light Blue
+                '#008fa7', // Medium Blue
+                '#0b4c5f', // Dark Navy Blue
+                '#a87b51', // Warm Brown
+                '#ead5c2'  // Pale Beige
             ];
             
             const categoryColors = {};
@@ -467,10 +505,8 @@
         function renderBarChart(dailyCategoryTotals, daysInMonth, categoryColors, sortedCategories) {
             const ctx = document.getElementById('dailyChart').getContext('2d');
             
-            // แสดงแกน X เป็นแค่วันที่ (1, 2, 3...) ตัด Week ออก
             const labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
 
-            // สร้าง Datasets แยกตามหมวดหมู่ (ทำ Stack)
             const datasets = sortedCategories.map(catItem => {
                 const catName = catItem[0];
                 const dataValues = Array.from({length: daysInMonth}, (_, i) => dailyCategoryTotals[i + 1][catName] || 0);
@@ -488,10 +524,7 @@
 
             barChartInstance = new Chart(ctx, {
                 type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: datasets
-                },
+                data: { labels: labels, datasets: datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -501,12 +534,9 @@
                             mode: 'index',
                             intersect: false,
                             callbacks: { 
-                                // แสดงผลใน Tooltip เป็นแค่วันที่
                                 title: (ctx) => `วันที่ ${ctx[0].label}`,
                                 label: (ctx) => {
-                                    if (ctx.raw > 0) {
-                                        return `${ctx.dataset.label}: ฿${ctx.raw.toLocaleString()}`;
-                                    }
+                                    if (ctx.raw > 0) return `${ctx.dataset.label}: ฿${ctx.raw.toLocaleString()}`;
                                     return null; 
                                 }
                             } 
@@ -516,11 +546,7 @@
                         x: {
                             stacked: true, 
                             grid: { display: false },
-                            ticks: { 
-                                maxTicksLimit: 31, 
-                                font: { size: 10 },
-                                color: '#6b7280' 
-                            }
+                            ticks: { maxTicksLimit: 31, font: { size: 10 }, color: '#6b7280' }
                         },
                         y: {
                             stacked: true, 
@@ -543,11 +569,9 @@
                 return;
             }
 
-            // เรียงลำดับจากวันที่ล่าสุดขึ้นก่อน
             transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
 
             transactions.forEach(tx => {
-                const txDate = new Date(tx.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
                 const isIncome = tx.type === 'income';
                 const amountColor = isIncome ? 'text-green-600' : 'text-red-500';
                 const sign = isIncome ? '+' : '-';
@@ -555,24 +579,22 @@
                 const userBadge = tx.user ? `<span class="inline-block px-2 py-0.5 ml-2 bg-gray-100 text-gray-500 text-[10px] rounded">${tx.user}</span>` : '';
                 const noteText = tx.note ? tx.note : '-';
 
+                // เพิ่ม onclick เข้าไปใน Div เพื่อให้กดแล้วส่งเลขแถว (sheetRow) ไปทำงาน
                 container.innerHTML += `
-                    <div class="flex justify-between items-center p-3 border border-gray-100 rounded-xl bg-white hover:bg-gray-50 transition-colors">
-                        <div class="flex items-center gap-3 w-3/4">
-                            <!-- วันที่ -->
+                    <div onclick="editRecord(${tx.sheetRow})" class="transaction-row cursor-pointer flex justify-between items-center p-3 border border-gray-100 rounded-xl bg-white hover:bg-blue-50 transition-colors shadow-sm">
+                        <div class="flex items-center gap-3 w-3/4 pointer-events-none">
                             <div class="w-12 h-12 flex flex-col items-center justify-center rounded-lg bg-gray-50 border border-gray-100 text-gray-600 flex-shrink-0">
                                 <span class="text-sm font-semibold">${new Date(tx.date).getDate()}</span>
                                 <span class="text-[10px]">${new Date(tx.date).toLocaleDateString('th-TH', { month: 'short' })}</span>
                             </div>
                             
-                            <!-- ข้อมูลรายการ -->
                             <div class="overflow-hidden w-full">
-                                <p class="text-sm font-medium text-gray-800 truncate" title="${tx.category}">${tx.category} ${userBadge}</p>
-                                <p class="text-xs text-gray-400 truncate" title="${noteText}">${noteText}</p>
+                                <p class="text-sm font-medium text-gray-800 truncate">${tx.category} ${userBadge}</p>
+                                <p class="text-xs text-gray-400 truncate">${noteText}</p>
                             </div>
                         </div>
                         
-                        <!-- จำนวนเงิน -->
-                        <div class="text-right flex-shrink-0 ml-2">
+                        <div class="text-right flex-shrink-0 ml-2 pointer-events-none">
                             <p class="text-sm font-semibold ${amountColor}">${sign}฿${Number(tx.amount).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</p>
                         </div>
                     </div>
@@ -580,9 +602,7 @@
             });
         }
 
-        window.onload = () => {
-            fetchData();
-        };
+        window.onload = () => { fetchData(); };
     </script>
 </body>
 </html>
