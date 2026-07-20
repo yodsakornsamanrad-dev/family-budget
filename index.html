@@ -376,9 +376,21 @@
                 balanceIconEl.innerHTML = '<i class="fa-solid fa-equals"></i>';
             }
 
-            // จัดเรียงหมวดหมู่และผูกสี (Color Mapping)
+            // จัดเรียงหมวดหมู่และผูกสี (Color Mapping) โทนพาสเทล
             const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
-            const colorPalette = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#84cc16'];
+            const colorPalette = [
+                '#FFB3BA', // Pastel Red/Pink
+                '#FFDFBA', // Pastel Orange
+                '#FFFFBA', // Pastel Yellow
+                '#BAFFC9', // Pastel Green
+                '#BAE1FF', // Pastel Blue
+                '#E2CBF7', // Pastel Purple
+                '#F3C4FB', // Pastel Magenta
+                '#C4FAF8', // Pastel Cyan
+                '#D0F4DE', // Pastel Mint
+                '#FCF6BD', // Pastel Lemon
+                '#FFC6FF'  // Pastel Lilac
+            ];
             
             const categoryColors = {};
             sortedCategories.forEach((item, index) => {
@@ -412,7 +424,7 @@
                     listContainer.innerHTML += `
                         <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
                             <span class="text-sm text-gray-600 flex items-center">
-                                <span class="w-3 h-3 inline-block rounded-full mr-2" style="background-color: ${color};"></span>
+                                <span class="w-3 h-3 inline-block rounded-full mr-2" style="background-color: ${color}; border: 1px solid #e5e7eb;"></span>
                                 ${catName} <span class="text-xs text-gray-400 ml-1">${percent}%</span>
                             </span>
                             <span class="text-sm font-semibold text-gray-800">฿${amount.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</span>
