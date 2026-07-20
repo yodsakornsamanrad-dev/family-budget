@@ -38,21 +38,41 @@
         <!-- ================= DASHBOARD VIEW ================= -->
         <div id="view-dashboard" class="space-y-6">
             
-            <!-- เลือกเดือน -->
+            <!-- เลือกเดือนแบบ Dropdown แบบ Custom (แก้ปัญหาปี พ.ศ. บนมือถือ) -->
             <div class="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-200">
-                <label for="monthFilter" class="text-sm font-medium text-gray-600"><i class="fa-regular fa-calendar-days mr-2"></i>เลือกเดือน</label>
-                <input type="month" id="monthFilter" class="p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-black font-medium">
+                <label class="text-sm font-medium text-gray-600"><i class="fa-regular fa-calendar-days mr-2"></i>เลือกเดือน</label>
+                <div class="flex gap-2">
+                    <select id="monthSelect" class="p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-black font-medium">
+                        <option value="01">มกราคม</option>
+                        <option value="02">กุมภาพันธ์</option>
+                        <option value="03">มีนาคม</option>
+                        <option value="04">เมษายน</option>
+                        <option value="05">พฤษภาคม</option>
+                        <option value="06">มิถุนายน</option>
+                        <option value="07">กรกฎาคม</option>
+                        <option value="08">สิงหาคม</option>
+                        <option value="09">กันยายน</option>
+                        <option value="10">ตุลาคม</option>
+                        <option value="11">พฤศจิกายน</option>
+                        <option value="12">ธันวาคม</option>
+                    </select>
+                    <select id="yearSelect" class="p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-black font-medium">
+                        <option value="2024">2024</option>
+                        <option value="2025">2025</option>
+                        <option value="2026">2026</option>
+                    </select>
+                </div>
             </div>
 
-            <!-- Summary Cards -->
+            <!-- Summary Cards (ปรับเป็นโทนขาวดำ) -->
             <div class="grid grid-cols-2 gap-4">
                 <div class="glass-card rounded-2xl p-5">
                     <p class="text-sm text-gray-500 mb-1">รายรับ</p>
-                    <h3 class="text-2xl font-semibold text-green-600">฿<span id="income-total">0</span></h3>
+                    <h3 class="text-2xl font-semibold text-gray-900">฿<span id="income-total">0</span></h3>
                 </div>
                 <div class="glass-card rounded-2xl p-5">
                     <p class="text-sm text-gray-500 mb-1">รายจ่าย</p>
-                    <h3 class="text-2xl font-semibold text-red-500">฿<span id="expense-total">0</span></h3>
+                    <h3 class="text-2xl font-semibold text-gray-900">฿<span id="expense-total">0</span></h3>
                 </div>
             </div>
 
@@ -86,7 +106,6 @@
             <div class="glass-card rounded-2xl p-6">
                 <form id="recordForm" class="space-y-5">
                     
-                    <!-- วันที่ทำรายการ (เพิ่มใหม่) -->
                     <div>
                         <label class="block text-sm text-gray-500 mb-1">วันที่ทำรายการ</label>
                         <input type="date" id="recordDate" class="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:border-black focus:ring-1 focus:ring-black bg-gray-50" required>
@@ -148,7 +167,7 @@
         
         let donutChartInstance = null;
         let barChartInstance = null;
-        let allData = []; // เก็บข้อมูลทั้งหมดไว้ในเครื่อง จะได้ไม่ต้องโหลดใหม่ตอนเปลี่ยนเดือน
+        let allData = []; 
 
         // Setup Header Date
         const headerOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -156,16 +175,19 @@
 
         // Setup Default Dates for Inputs
         const today = new Date();
-        // 1. ตั้งค่า default วันที่เพิ่มรายการเป็นวันนี้
-        const localDateString = today.toLocaleDateString('en-CA'); // รูปแบบ YYYY-MM-DD
+        const localDateString = today.toLocaleDateString('en-CA'); 
         document.getElementById('recordDate').value = localDateString;
         
-        // 2. ตั้งค่า default ตัวกรองเดือนเป็นเดือนปัจจุบัน
-        const currentMonthString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-        document.getElementById('monthFilter').value = currentMonthString;
+        // ตั้งค่า Default ของ Dropdown เดือนและปี
+        const currentMonthString = String(today.getMonth() + 1).padStart(2, '0');
+        const currentYearString = today.getFullYear().toString();
+        
+        document.getElementById('monthSelect').value = currentMonthString;
+        document.getElementById('yearSelect').value = currentYearString;
 
-        // เมื่อเปลี่ยนเดือนให้ประมวลผลข้อมูลใหม่
-        document.getElementById('monthFilter').addEventListener('change', renderDashboard);
+        // เมื่อเปลี่ยนเดือน/ปี ให้ประมวลผลข้อมูลใหม่
+        document.getElementById('monthSelect').addEventListener('change', renderDashboard);
+        document.getElementById('yearSelect').addEventListener('change', renderDashboard);
 
         // Tab Switching Logic
         function switchTab(tab) {
@@ -179,7 +201,7 @@
                 document.getElementById('tab-add').classList.remove('bg-white', 'shadow-sm', 'text-black');
                 document.getElementById('tab-add').classList.add('text-gray-500');
                 
-                if(allData.length === 0) fetchData(); // โหลดครั้งแรกถ้ายังไม่มีข้อมูล
+                if(allData.length === 0) fetchData(); 
             } else {
                 document.getElementById('view-dashboard').classList.add('hidden');
                 document.getElementById('view-add').classList.remove('hidden');
@@ -199,11 +221,10 @@
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังบันทึก...';
             btn.disabled = true;
 
-            // นำวันที่จาก input มาแปลงให้เป็น format ที่ถูกต้อง
             const selectedDate = new Date(document.getElementById('recordDate').value);
 
             const data = {
-                date: selectedDate.toISOString(), // ใช้วันที่ที่ผู้ใช้เลือก
+                date: selectedDate.toISOString(),
                 type: document.getElementById('type').value,
                 category: document.getElementById('category').value,
                 amount: parseFloat(document.getElementById('amount').value),
@@ -219,15 +240,14 @@
             .then(resData => {
                 alert('บันทึกข้อมูลเรียบร้อยแล้ว!');
                 
-                // รีเซ็ตฟอร์มแต่คงวันที่ไว้เป็นวันปัจจุบัน
                 document.getElementById('recordForm').reset();
                 document.getElementById('recordDate').value = localDateString;
                 
                 btn.innerHTML = 'บันทึกข้อมูล';
                 btn.disabled = false;
                 
-                fetchData(); // ดึงข้อมูลใหม่เพื่ออัปเดต Dashboard
-                switchTab('dashboard'); // กลับไปหน้า Dashboard
+                fetchData(); 
+                switchTab('dashboard'); 
             })
             .catch(error => {
                 console.error('Error!', error.message);
@@ -248,8 +268,8 @@
             fetch(SCRIPT_URL)
                 .then(res => res.json())
                 .then(data => {
-                    allData = data; // เก็บข้อมูลลงตัวแปร
-                    renderDashboard(); // เรียกฟังก์ชันแสดงผล
+                    allData = data; 
+                    renderDashboard(); 
                     btn.innerHTML = originalText;
                 })
                 .catch(err => {
@@ -260,17 +280,14 @@
 
         // ประมวลผลและแสดงผลกราฟ/ตัวเลข บน Dashboard
         function renderDashboard() {
-            const selectedMonthVal = document.getElementById('monthFilter').value; // เช่น "2026-07"
-            if(!selectedMonthVal) return;
-            
-            const [filterYear, filterMonth] = selectedMonthVal.split('-');
+            const filterMonth = document.getElementById('monthSelect').value;
+            const filterYear = document.getElementById('yearSelect').value;
             
             let totalIncome = 0;
             let totalExpense = 0;
             let categoryTotals = {};
             let dailyTotals = {};
 
-            // จำนวนวันในเดือนที่เลือก (ใช้สำหรับสร้างแกน X ของกราฟแท่ง)
             const daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
 
             allData.forEach(row => {
@@ -278,43 +295,34 @@
                 const rYear = rowDate.getFullYear().toString();
                 const rMonth = String(rowDate.getMonth() + 1).padStart(2, '0');
                 
-                // กรองเฉพาะเดือนที่เลือก
                 if (rYear === filterYear && rMonth === filterMonth) {
                     const amt = Number(row.amount);
                     if (row.type === 'income') {
                         totalIncome += amt;
                     } else if (row.type === 'expense') {
                         totalExpense += amt;
-                        // รวมหมวดหมู่
                         categoryTotals[row.category] = (categoryTotals[row.category] || 0) + amt;
                         
-                        // รวมรายวัน
                         const day = rowDate.getDate();
                         dailyTotals[day] = (dailyTotals[day] || 0) + amt;
                     }
                 }
             });
 
-            // 1. อัปเดตตัวเลข
             document.getElementById('income-total').innerText = totalIncome.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2});
             document.getElementById('expense-total').innerText = totalExpense.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2});
 
-            // 2. วาดกราฟ Donut และรายการ Breakdown
             renderDonutChart(categoryTotals, totalExpense);
-
-            // 3. วาดกราฟ Bar (รายวัน)
             renderBarChart(dailyTotals, daysInMonth);
         }
 
         function renderDonutChart(categoryTotals, totalExpense) {
             const ctx = document.getElementById('expenseChart').getContext('2d');
             
-            // เรียงลำดับหมวดหมู่จากจ่ายมากไปน้อย
             const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
             const labels = sortedCategories.map(item => item[0]);
             const dataValues = sortedCategories.map(item => item[1]);
 
-            // อัปเดต HTML Breakdown List
             const listContainer = document.getElementById('categoryList');
             listContainer.innerHTML = '';
             
@@ -338,7 +346,6 @@
                 });
             }
 
-            // จัดการ Chart.js Donut
             if (donutChartInstance) donutChartInstance.destroy();
 
             donutChartInstance = new Chart(ctx, {
@@ -358,7 +365,7 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false }, // ปิด Legend เดิมเพราะใช้ List แทนแล้ว
+                        legend: { display: false },
                         tooltip: { callbacks: { label: function(context) {
                             let label = context.label || '';
                             if (label !== 'ไม่มีข้อมูล') {
@@ -375,10 +382,7 @@
         function renderBarChart(dailyTotals, daysInMonth) {
             const ctx = document.getElementById('dailyChart').getContext('2d');
             
-            // สร้างแกน X (วันที่ 1 ถึง วันสุดท้ายของเดือน)
             const labels = Array.from({length: daysInMonth}, (_, i) => i + 1);
-            
-            // จับคู่ข้อมูลยอดเงินให้ตรงกับวัน
             const dataValues = labels.map(day => dailyTotals[day] || 0);
 
             if (barChartInstance) barChartInstance.destroy();
@@ -390,7 +394,7 @@
                     datasets: [{
                         label: 'รายจ่าย (บาท)',
                         data: dataValues,
-                        backgroundColor: '#111827', // Black modern
+                        backgroundColor: '#111827',
                         borderRadius: 4,
                         barPercentage: 0.8
                     }]
@@ -405,20 +409,19 @@
                     scales: {
                         x: {
                             grid: { display: false },
-                            ticks: { maxTicksLimit: 10, font: { size: 10 } } // ไม่ให้แกน X แน่นเกินไป
+                            ticks: { maxTicksLimit: 10, font: { size: 10 } }
                         },
                         y: {
                             beginAtZero: true,
                             grid: { color: '#f3f4f6' },
                             border: { display: false },
-                            ticks: { font: { size: 10 }, callback: (val) => val > 0 ? (val/1000) + 'k' : 0 } // ย่อตัวเลขแกน Y
+                            ticks: { font: { size: 10 }, callback: (val) => val > 0 ? (val/1000) + 'k' : 0 }
                         }
                     }
                 }
             });
         }
 
-        // โหลดข้อมูลอัตโนมัติเมื่อเปิดหน้าเว็บ
         window.onload = () => {
             fetchData();
         };
