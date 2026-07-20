@@ -92,7 +92,7 @@
             <!-- Chart: Daily Trend (Stacked) -->
             <div class="glass-card rounded-2xl p-5">
                 <h3 class="text-md font-medium mb-4">รายจ่ายรายวัน (บาท)</h3>
-                <div class="relative h-64 w-full"> <!-- เพิ่มความสูงเล็กน้อยให้เห็นสัปดาห์ชัดเจน -->
+                <div class="relative h-64 w-full">
                     <canvas id="dailyChart"></canvas>
                 </div>
             </div>
@@ -314,7 +314,7 @@
             let totalExpense = 0;
             let categoryTotals = {};
             
-            // เปลี่ยนมาเก็บยอดใช้จ่ายรายวัน "แยกตามหมวดหมู่"
+            // เก็บยอดใช้จ่ายรายวัน "แยกตามหมวดหมู่"
             let dailyCategoryTotals = {};
             const daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
             for (let i = 1; i <= daysInMonth; i++) {
@@ -376,7 +376,7 @@
                 balanceIconEl.innerHTML = '<i class="fa-solid fa-equals"></i>';
             }
 
-            // จัดเรียงหมวดหมู่และผูกสี (Color Mapping) เพื่อให้กราฟโดนัทและกราฟแท่งใช้สีเดียวกัน
+            // จัดเรียงหมวดหมู่และผูกสี (Color Mapping)
             const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
             const colorPalette = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#84cc16'];
             
@@ -386,7 +386,7 @@
             });
 
             renderDonutChart(sortedCategories, totalExpense, categoryColors);
-            renderBarChart(dailyCategoryTotals, daysInMonth, filterYear, filterMonth, categoryColors, sortedCategories);
+            renderBarChart(dailyCategoryTotals, daysInMonth, categoryColors, sortedCategories);
             renderTransactionDetails(monthlyTransactions); 
         }
 
@@ -452,18 +452,11 @@
             });
         }
 
-        function renderBarChart(dailyCategoryTotals, daysInMonth, filterYear, filterMonth, categoryColors, sortedCategories) {
+        function renderBarChart(dailyCategoryTotals, daysInMonth, categoryColors, sortedCategories) {
             const ctx = document.getElementById('dailyChart').getContext('2d');
             
-            // สร้าง Label แกน X เป็น 2 บรรทัด (วันที่ และ สัปดาห์)
-            const labels = Array.from({length: daysInMonth}, (_, i) => {
-                const day = i + 1;
-                // คำนวณสัปดาห์ของเดือน
-                const firstDayOfMonth = new Date(filterYear, filterMonth - 1, 1).getDay();
-                const weekNum = Math.ceil((day + firstDayOfMonth) / 7);
-                // ส่งเป็น Array เพื่อให้ Chart.js ปัดขึ้นบรรทัดใหม่
-                return [day.toString(), `W${weekNum}`]; 
-            });
+            // แสดงแกน X เป็นแค่วันที่ (1, 2, 3...) ตัด Week ออก
+            const labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
 
             // สร้าง Datasets แยกตามหมวดหมู่ (ทำ Stack)
             const datasets = sortedCategories.map(catItem => {
@@ -493,12 +486,12 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: { 
-                            mode: 'index', // เวลาชี้ให้แสดงหมวดหมู่ทั้งหมดในวันนั้น
+                            mode: 'index',
                             intersect: false,
                             callbacks: { 
-                                title: (ctx) => `วันที่ ${ctx[0].label[0]} (สัปดาห์ที่ ${ctx[0].label[1].replace('W', '')})`,
+                                // แสดงผลใน Tooltip เป็นแค่วันที่
+                                title: (ctx) => `วันที่ ${ctx[0].label}`,
                                 label: (ctx) => {
-                                    // ซ่อนค่าที่เป็น 0 จาก Tooltip
                                     if (ctx.raw > 0) {
                                         return `${ctx.dataset.label}: ฿${ctx.raw.toLocaleString()}`;
                                     }
@@ -509,16 +502,16 @@
                     },
                     scales: {
                         x: {
-                            stacked: true, // เปิดโหมด Stack
+                            stacked: true, 
                             grid: { display: false },
                             ticks: { 
                                 maxTicksLimit: 31, 
                                 font: { size: 10 },
-                                color: '#6b7280' // สีเทาให้ดูไม่รก
+                                color: '#6b7280' 
                             }
                         },
                         y: {
-                            stacked: true, // เปิดโหมด Stack
+                            stacked: true, 
                             beginAtZero: true,
                             grid: { color: '#f3f4f6' },
                             border: { display: false },
