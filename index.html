@@ -107,7 +107,7 @@
                 </div>
             </div>
 
-            <!-- Chart: Daily Trend (พร้อม Data Labels แบบ ฿163) -->
+            <!-- Chart: Daily Trend (ยอดรวมอยู่บนแท่ง) -->
             <div class="glass-card rounded-2xl p-5">
                 <h3 class="text-md font-bold mb-2 text-gray-700">รายจ่ายรายวัน (บาท)</h3>
                 <div class="relative h-80 w-full">
@@ -115,7 +115,7 @@
                 </div>
             </div>
 
-            <!-- Chart: Category Donut (พร้อม Callout Lines) -->
+            <!-- Chart: Category Donut -->
             <div class="glass-card rounded-2xl p-5">
                 <h3 class="text-md font-bold mb-2 text-gray-700">สัดส่วนค่าใช้จ่ายตามหมวดหมู่</h3>
                 <div class="relative h-80 w-full mb-2">
@@ -203,16 +203,16 @@
         let editRowId = null;
 
         const categoryColorMap = {
-            'อาหาร': '#fb923c',          // Soft Orange
-            'เดินทาง': '#60a5fa',        // Soft Blue
-            'บิล': '#facc15',           // Soft Yellow
-            'ของใช้ในบ้าน': '#34d399',     // Soft Green
-            'ของใช้ส่วนตัว': '#c084fc',     // Soft Purple
-            'ประกัน/ออม': '#38bdf8',       // Soft Sky Blue
-            'ผ่อนรถ': '#f472b6',         // Soft Pink
-            'ผ่อนบ้าน/คอนโด': '#818cf8',   // Soft Indigo
-            'จ่ายหนี้บัตร/คืนเงิน': '#f87171', // Soft Red
-            'อื่นๆ': '#94a3b8'            // Soft Slate/Gray
+            'อาหาร': '#fb923c',          
+            'เดินทาง': '#60a5fa',        
+            'บิล': '#facc15',           
+            'ของใช้ในบ้าน': '#34d399',     
+            'ของใช้ส่วนตัว': '#c084fc',     
+            'ประกัน/ออม': '#38bdf8',       
+            'ผ่อนรถ': '#f472b6',         
+            'ผ่อนบ้าน/คอนโด': '#818cf8',   
+            'จ่ายหนี้บัตร/คืนเงิน': '#f87171', 
+            'อื่นๆ': '#94a3b8'            
         };
         const fallbackColors = ['#fb923c', '#60a5fa', '#34d399', '#facc15', '#c084fc', '#f472b6', '#38bdf8', '#818cf8', '#f87171', '#94a3b8'];
 
@@ -522,7 +522,7 @@
             renderTransactionDetails(monthlyTransactions); 
         }
 
-        // ====== 1. กราฟโดนัท (Callout Line + Labels ข้างนอก) ======
+        // ====== 1. กราฟโดนัท ======
         function renderDonutChart(sortedCategories, totalExpense, categoryColors) {
             const ctx = document.getElementById('expenseChart').getContext('2d');
             const labels = sortedCategories.length > 0 ? sortedCategories.map(item => item[0]) : ['ไม่มีข้อมูล'];
@@ -643,7 +643,7 @@
             });
         }
 
-        // ====== 2. กราฟแท่ง (พร้อม Data Labels รูปแบบ ฿163) ======
+        // ====== 2. กราฟแท่ง (ยอดรวมอยู่เหนือแท่ง Stack) ======
         function renderBarChart(dailyCategoryTotals, daysInMonth, categoryColors, sortedCategories) {
             const ctx = document.getElementById('dailyChart').getContext('2d');
             const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -677,6 +677,7 @@
                         y: {
                             stacked: true,
                             beginAtZero: true,
+                            grace: '15%', // เพิ่มพื้นที่ด้านบนป้องกันตัวเลขโดนตัด
                             grid: { color: '#f1f5f9' },
                             ticks: { font: { size: 10 } }
                         }
@@ -693,23 +694,37 @@
                                 font: { size: 11, family: 'Segoe UI' }
                             }
                         },
-                        // กำหนดค่า Data Labels สำหรับกราฟแท่งรายวัน
                         datalabels: {
                             display: function(context) {
-                                // แสดงเฉพาะรายการที่มียอดเงินมากกว่า 0 บาท
-                                return context.dataset.data[context.dataIndex] > 0;
+                                // เช็คว่าแท่งนี้คือแท่งบนสุดของ Stack ในวันนั้นหรือไม่
+                                const datasetArray = context.chart.data.datasets;
+                                let lastVisibleIndex = -1;
+                                for (let i = datasetArray.length - 1; i >= 0; i--) {
+                                    if (datasetArray[i].data[context.dataIndex] > 0) {
+                                        lastVisibleIndex = i;
+                                        break;
+                                    }
+                                }
+                                // แสดงเฉพาะบน Dataset ที่อยู่บนสุด
+                                return context.datasetIndex === lastVisibleIndex;
                             },
-                            formatter: function(value) {
-                                return '฿' + Math.round(value).toLocaleString('th-TH');
+                            formatter: function(value, context) {
+                                // คำนวณผลรวมของทุก Category ในวันนั้น
+                                let sum = 0;
+                                context.chart.data.datasets.forEach(dataset => {
+                                    sum += dataset.data[context.dataIndex] || 0;
+                                });
+                                return '฿' + Math.round(sum).toLocaleString('th-TH');
                             },
                             color: '#1e293b',
-                            anchor: 'center',
-                            align: 'center',
+                            anchor: 'end', // ดันขึ้นไปเกาะขอบบนของแท่ง
+                            align: 'top',  // จัดให้อยู่เหนือแท่ง
+                            offset: 2,
                             font: {
                                 size: 10,
                                 weight: 'bold'
                             },
-                            clamp: true
+                            clamp: true // ป้องกันล้นออกนอกจอ
                         },
                         tooltip: {
                             callbacks: {
