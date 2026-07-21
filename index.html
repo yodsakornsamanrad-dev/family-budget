@@ -107,7 +107,7 @@
                 </div>
             </div>
 
-            <!-- Chart: Daily Trend (พร้อม Legend) -->
+            <!-- Chart: Daily Trend (พร้อม Data Labels แบบ ฿163) -->
             <div class="glass-card rounded-2xl p-5">
                 <h3 class="text-md font-bold mb-2 text-gray-700">รายจ่ายรายวัน (บาท)</h3>
                 <div class="relative h-80 w-full">
@@ -115,7 +115,7 @@
                 </div>
             </div>
 
-            <!-- Chart: Category Donut (พร้อม Callout Lines ที่สมบูรณ์) -->
+            <!-- Chart: Category Donut (พร้อม Callout Lines) -->
             <div class="glass-card rounded-2xl p-5">
                 <h3 class="text-md font-bold mb-2 text-gray-700">สัดส่วนค่าใช้จ่ายตามหมวดหมู่</h3>
                 <div class="relative h-80 w-full mb-2">
@@ -522,7 +522,7 @@
             renderTransactionDetails(monthlyTransactions); 
         }
 
-        // ====== 1. กราฟโดนัท (Callout Line + Labels ข้างนอกเต็มรูปแบบ) ======
+        // ====== 1. กราฟโดนัท (Callout Line + Labels ข้างนอก) ======
         function renderDonutChart(sortedCategories, totalExpense, categoryColors) {
             const ctx = document.getElementById('expenseChart').getContext('2d');
             const labels = sortedCategories.length > 0 ? sortedCategories.map(item => item[0]) : ['ไม่มีข้อมูล'];
@@ -553,7 +553,6 @@
 
             if (donutChartInstance) donutChartInstance.destroy();
 
-            // Plugin วาดเส้น Callout Line + ข้อความระบุชื่อและ %
             const donutCalloutLines = {
                 id: 'donutCalloutLines',
                 afterDraw(chart) {
@@ -575,22 +574,18 @@
                         const cosMid = Math.cos(midAngle);
                         const sinMid = Math.sin(midAngle);
                         
-                        // จุดที่ 1: ขอบวงโดนัท
                         const x1 = x + cosMid * outerRadius;
                         const y1 = y + sinMid * outerRadius;
                         
-                        // จุดที่ 2: ยื่นออกไปทางทะแยง
                         const extLength = 16;
                         const x2 = x + cosMid * (outerRadius + extLength);
                         const y2 = y + sinMid * (outerRadius + extLength);
 
-                        // จุดที่ 3: หักแนวนอน
                         const isRight = cosMid >= 0;
                         const horizLength = 14;
                         const x3 = isRight ? x2 + horizLength : x2 - horizLength;
                         const y3 = y2;
 
-                        // วาดเส้น Callout
                         ctx.beginPath();
                         ctx.moveTo(x1, y1);
                         ctx.lineTo(x2, y2);
@@ -599,7 +594,6 @@
                         ctx.lineWidth = 1.5;
                         ctx.stroke();
 
-                        // เขียนข้อความหมวดหมู่ + % ที่ปลายเส้น
                         ctx.font = 'bold 11px "Segoe UI", sans-serif';
                         ctx.fillStyle = '#475569';
                         ctx.textAlign = isRight ? 'left' : 'right';
@@ -627,11 +621,11 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     layout: {
-                        padding: { top: 30, bottom: 30, left: 70, right: 70 } // เว้นระยะกันข้อความ Callout ตกขอบ
+                        padding: { top: 30, bottom: 30, left: 70, right: 70 }
                     },
                     plugins: {
                         legend: { display: false },
-                        datalabels: { display: false }, // ปิด DataLabels ด้านใน เพื่อใช้ Callout ด้านนอกแทน
+                        datalabels: { display: false },
                         tooltip: {
                             enabled: sortedCategories.length > 0,
                             callbacks: {
@@ -649,7 +643,7 @@
             });
         }
 
-        // ====== 2. กราฟแท่ง (Daily Expenses Stacked Bar Chart + Legend) ======
+        // ====== 2. กราฟแท่ง (พร้อม Data Labels รูปแบบ ฿163) ======
         function renderBarChart(dailyCategoryTotals, daysInMonth, categoryColors, sortedCategories) {
             const ctx = document.getElementById('dailyChart').getContext('2d');
             const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -689,7 +683,7 @@
                     },
                     plugins: {
                         legend: { 
-                            display: true, // เปิดแสดง Legend
+                            display: true,
                             position: 'top',
                             align: 'center',
                             labels: {
@@ -699,7 +693,24 @@
                                 font: { size: 11, family: 'Segoe UI' }
                             }
                         },
-                        datalabels: { display: false },
+                        // กำหนดค่า Data Labels สำหรับกราฟแท่งรายวัน
+                        datalabels: {
+                            display: function(context) {
+                                // แสดงเฉพาะรายการที่มียอดเงินมากกว่า 0 บาท
+                                return context.dataset.data[context.dataIndex] > 0;
+                            },
+                            formatter: function(value) {
+                                return '฿' + Math.round(value).toLocaleString('th-TH');
+                            },
+                            color: '#1e293b',
+                            anchor: 'center',
+                            align: 'center',
+                            font: {
+                                size: 10,
+                                weight: 'bold'
+                            },
+                            clamp: true
+                        },
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
