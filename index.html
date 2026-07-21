@@ -8,9 +8,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Chart.js DataLabels Plugin (สำหรับแสดงตัวเลขบนกราฟ) -->
+    <!-- Chart.js DataLabels Plugin -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-    <!-- FontAwesome -->
+    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
@@ -59,7 +59,7 @@
                         <option value="12">ธันวาคม</option>
                     </select>
                     <select id="yearSelect" class="p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 font-medium">
-                        <!-- ปีจะถูกสร้างขึ้นมาโดยอัตโนมัติจาก JS -->
+                        <!-- ปีจะสร้างโดยอัตโนมัติจาก JS -->
                     </select>
                 </div>
             </div>
@@ -109,16 +109,16 @@
 
             <!-- Chart: Daily Trend -->
             <div class="glass-card rounded-2xl p-5">
-                <h3 class="text-md font-bold mb-4 text-gray-700">รายจ่ายรายวัน (บาท)</h3>
-                <div class="relative h-64 w-full">
+                <h3 class="text-md font-bold mb-2 text-gray-700">รายจ่ายรายวัน (บาท)</h3>
+                <div class="relative h-72 w-full">
                     <canvas id="dailyChart"></canvas>
                 </div>
             </div>
 
             <!-- Chart: Category Donut -->
             <div class="glass-card rounded-2xl p-5">
-                <h3 class="text-md font-bold mb-4 text-gray-700">สัดส่วนค่าใช้จ่ายตามหมวดหมู่</h3>
-                <div class="relative h-56 w-full mb-6">
+                <h3 class="text-md font-bold mb-2 text-gray-700">สัดส่วนค่าใช้จ่ายตามหมวดหมู่</h3>
+                <div class="relative h-64 w-full mb-4">
                     <canvas id="expenseChart"></canvas>
                 </div>
                 <div id="categoryList" class="space-y-2"></div>
@@ -192,10 +192,9 @@
 
     <!-- JS Logic -->
     <script>
-        // !!!!!!!!!!! นำ SCRIPT_URL เดิมของคุณมาใส่ตรงนี้ !!!!!!!!!!!
+        // !!!!!!!!!!! เอา URL จาก Google Apps Script มาใส่ตรงนี้ !!!!!!!!!!!
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwIRpGgZ2qiXCCgSzt89zwrc7lfsW-jrTSrAhN5IQa2BkXlw1XO2ul2UE8cA5W2P5hh/exec';
         
-        // ลงทะเบียน DataLabels Plugin ให้กับ Chart.js
         Chart.register(ChartDataLabels);
 
         let donutChartInstance = null;
@@ -203,6 +202,25 @@
         let allData = []; 
         let editMode = false;
         let editRowId = null;
+
+        // กำหนดสีเฉพาะสำหรับแต่ละหมวดหมู่ (Distinct Colors)
+        const categoryColorMap = {
+            'อาหาร': '#f97316',          // ส้ม
+            'เดินทาง': '#2563eb',        // น้ำเงิน
+            'บิล': '#eab308',           // เหลือง
+            'ของใช้ในบ้าน': '#10b981',     // เขียว
+            'ของใช้ส่วนตัว': '#8b5cf6',     // ม่วง
+            'ประกัน/ออม': '#06b6d4',       // ฟ้า
+            'ผ่อนรถ': '#ec4899',         // ชมพู
+            'ผ่อนบ้าน/คอนโด': '#6366f1',   // คราม
+            'จ่ายหนี้บัตร/คืนเงิน': '#ef4444', // แดง
+            'อื่นๆ': '#64748b'            // เทา
+        };
+        const fallbackColors = ['#f97316', '#2563eb', '#10b981', '#eab308', '#8b5cf6', '#ec4899', '#06b6d4', '#6366f1', '#ef4444', '#64748b'];
+
+        function getCategoryColor(categoryName, index) {
+            return categoryColorMap[categoryName] || fallbackColors[index % fallbackColors.length];
+        }
 
         const categoriesByType = {
             expense: [
@@ -496,16 +514,17 @@
             }
 
             const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
-            const colorPalette = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#f59e0b', '#fbbf24', '#fcd34d', '#10b981', '#34d399', '#6ee7b7'];
             const categoryColors = {};
-            sortedCategories.forEach((item, index) => { categoryColors[item[0]] = colorPalette[index % colorPalette.length]; });
+            sortedCategories.forEach((item, index) => { 
+                categoryColors[item[0]] = getCategoryColor(item[0], index); 
+            });
 
             renderDonutChart(sortedCategories, totalExpense, categoryColors);
             renderBarChart(dailyCategoryTotals, daysInMonth, categoryColors, sortedCategories);
             renderTransactionDetails(monthlyTransactions); 
         }
 
-        // ====== 1. แก้ไขกราฟโดนัท (เพิ่มเปอร์เซ็นต์ในชิ้นโดนัท) ======
+        // ====== 1. กราฟโดนัท (พร้อม Callout Labels และเส้นชี้) ======
         function renderDonutChart(sortedCategories, totalExpense, categoryColors) {
             const ctx = document.getElementById('expenseChart').getContext('2d');
             const labels = sortedCategories.map(item => item[0]);
@@ -536,6 +555,39 @@
 
             if (donutChartInstance) donutChartInstance.destroy();
 
+            // Plugin วาดเส้น Callout Line เชื่อมจากชิ้นโดนัทไปยังตัวเลข
+            const donutCalloutLines = {
+                id: 'donutCalloutLines',
+                afterDraw(chart) {
+                    const { ctx } = chart;
+                    const meta = chart.getDatasetMeta(0);
+                    if (!meta || !meta.data || meta.data.length === 0) return;
+                    if (chart.data.labels[0] === 'ไม่มีข้อมูล') return;
+
+                    meta.data.forEach((element) => {
+                        const { x, y, startAngle, endAngle, outerRadius } = element;
+                        const midAngle = startAngle + (endAngle - startAngle) / 2;
+                        
+                        // จุดเริ่มต้นที่ขอบโดนัท
+                        const x1 = x + Math.cos(midAngle) * outerRadius;
+                        const y1 = y + Math.sin(midAngle) * outerRadius;
+                        
+                        // จุดปลายทางยื่นออกมานอกโดนัท
+                        const x2 = x + Math.cos(midAngle) * (outerRadius + 10);
+                        const y2 = y + Math.sin(midAngle) * (outerRadius + 10);
+
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.strokeStyle = '#cbd5e1';
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+                        ctx.restore();
+                    });
+                }
+            };
+
             donutChartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -547,9 +599,13 @@
                         borderColor: '#ffffff'
                     }]
                 },
+                plugins: [donutCalloutLines],
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    layout: {
+                        padding: { top: 20, bottom: 20, left: 35, right: 35 } // เว้นพื้นที่ให้ Callout
+                    },
                     plugins: {
                         legend: { display: false },
                         tooltip: { callbacks: { label: function(context) {
@@ -557,27 +613,27 @@
                             if (label !== 'ไม่มีข้อมูล') label += ': ฿' + context.raw.toLocaleString();
                             return label;
                         }}},
-                        // ตั้งค่า DataLabels สำหรับโดนัท
                         datalabels: {
-                            color: '#ffffff',
-                            font: { weight: 'bold', size: 12 },
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 8,
+                            color: '#334155',
+                            font: { weight: 'bold', size: 11 },
                             formatter: (value, context) => {
                                 if (context.chart.data.labels[0] === 'ไม่มีข้อมูล') return '';
                                 let sum = 0;
                                 let dataArr = context.chart.data.datasets[0].data;
                                 dataArr.forEach(data => { sum += data; });
-                                let percentage = (value * 100 / sum).toFixed(0) + "%";
-                                // ซ่อนเปอร์เซ็นต์ถ้าน้อยกว่า 5% จะได้ไม่ล้นชิ้นโดนัท
-                                return (value * 100 / sum) > 5 ? percentage : '';
+                                return ((value * 100) / sum).toFixed(1) + "%";
                             }
                         }
                     },
-                    cutout: '65%'
+                    cutout: '60%'
                 }
             });
         }
 
-        // ====== 2. แก้ไขกราฟแท่ง (เพิ่มตัวเลขยอดรวมเหนือแท่ง) ======
+        // ====== 2. กราฟแท่ง (พร้อม Legend และ Distinct Colors) ======
         function renderBarChart(dailyCategoryTotals, daysInMonth, categoryColors, sortedCategories) {
             const ctx = document.getElementById('dailyChart').getContext('2d');
             const labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
@@ -595,7 +651,7 @@
                 };
             });
 
-            // สร้าง Plugin ช่วยวาดตัวเลข "ยอดรวม" บนสุดของกราฟแต่ละวัน
+            // Plugin สำหรับตัวเลขยอดรวมเหนือแท่งกราฟ
             const topLabelsPlugin = {
                 id: 'topLabels',
                 afterDatasetsDraw(chart) {
@@ -623,10 +679,8 @@
                             ctx.save();
                             ctx.textAlign = 'center';
                             ctx.textBaseline = 'bottom';
-                            ctx.fillStyle = '#64748b'; // สีเทากลาง
+                            ctx.fillStyle = '#64748b';
                             ctx.font = 'bold 10px "Segoe UI", sans-serif';
-                            
-                            // ใช้การย่อตัวเลข (เช่น 1,500 เป็น 1.5K) เพื่อไม่ให้ซ้อนกันในหน้าจอมือถือ
                             ctx.fillText(formatter.format(total), xPos, topY - 3);
                             ctx.restore();
                         }
@@ -639,13 +693,26 @@
             barChartInstance = new Chart(ctx, {
                 type: 'bar',
                 data: { labels: labels, datasets: datasets },
-                plugins: [topLabelsPlugin], // เรียกใช้ Custom Plugin ที่เพิ่งสร้าง
+                plugins: [topLabelsPlugin],
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false },
-                        // ปิด DataLabels เดิมสำหรับกราฟแท่ง เพื่อไม่ให้มันโชว์ทุกบล็อคย่อย
+                        // เปิดใช้งาน Legend กำกับหมวดหมู่ด้านบนกราฟ
+                        legend: { 
+                            display: true,
+                            position: 'top',
+                            align: 'center',
+                            labels: {
+                                boxWidth: 10,
+                                boxHeight: 10,
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                font: { size: 11, family: "'Segoe UI', sans-serif" },
+                                color: '#475569',
+                                padding: 12
+                            }
+                        },
                         datalabels: { display: false },
                         tooltip: { 
                             mode: 'index',
