@@ -219,7 +219,7 @@
         let allData = []; 
         let editMode = false;
         let editRowId = null;
-        let currentViewMode = 'month'; // 'month', '3weeks', '3months', 'year'
+        let currentViewMode = 'month'; 
 
         const categoryColorMap = {
             'อาหาร': '#fb923c',          
@@ -272,7 +272,6 @@
         const currentMonthString = String(today.getMonth() + 1).padStart(2, '0');
         document.getElementById('monthSelect').value = currentMonthString;
 
-        // เมื่อเลือก Dropdown เดือนหรือปี ให้กลับไปใช้โหมดตามนั้นอัตโนมัติ
         document.getElementById('monthSelect').addEventListener('change', () => setViewMode('month'));
         document.getElementById('yearSelect').addEventListener('change', () => {
             if (currentViewMode !== 'month' && currentViewMode !== 'year') setViewMode('year');
@@ -318,7 +317,6 @@
 
         function setViewMode(mode) {
             currentViewMode = mode;
-            // Update button styles
             document.querySelectorAll('.view-btn').forEach(btn => {
                 if(btn.dataset.mode === mode) {
                     btn.classList.add('bg-blue-600', 'text-white', 'shadow-md');
@@ -481,10 +479,9 @@
             
             const mNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
-            // จัดการเงื่อนไขวันเวลาตามโหมด
             if (currentViewMode === 'month') {
                 startDate = new Date(filterYear, filterMonth - 1, 1);
-                endDate = new Date(filterYear, filterMonth, 0); // วันสุดท้ายของเดือน
+                endDate = new Date(filterYear, filterMonth, 0); 
                 const daysInMonth = endDate.getDate();
                 for(let i = 1; i <= daysInMonth; i++) xAxisLabels.push(i.toString());
                 groupByKey = (d) => d.getDate().toString();
@@ -493,7 +490,7 @@
             else if (currentViewMode === '3weeks') {
                 endDate = new Date(now);
                 startDate = new Date(now);
-                startDate.setDate(now.getDate() - 20); // รวมวันนี้เป็น 21 วัน
+                startDate.setDate(now.getDate() - 20); 
                 for(let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
                     xAxisLabels.push(`${d.getDate()}/${d.getMonth()+1}`);
                 }
@@ -520,7 +517,6 @@
                 periodText = `ปี ${filterYear+543}`;
             }
 
-            // แปลง Period Text ให้ UI
             document.querySelectorAll('.period-text').forEach(el => el.innerText = periodText);
 
             let previousBalance = 0; 
@@ -541,12 +537,10 @@
                 const rDateOnly = new Date(rowDate.getFullYear(), rowDate.getMonth(), rowDate.getDate());
                 const amt = Number(row.amount);
                 
-                // ถ้าน้อยกว่าวันเริ่มต้นของช่วงเวลาที่เลือก ให้นับเป็นยอดยกมา
                 if (rDateOnly < sDateOnly) {
                     if (row.type === 'income') previousBalance += amt;
                     else if (row.type === 'expense') previousBalance -= amt;
                 } 
-                // ถ้าอยู่ในช่วงเวลาที่เลือก
                 else if (rDateOnly >= sDateOnly && rDateOnly <= eDateOnly) {
                     viewTransactions.push(row); 
                     if (row.type === 'income') {
@@ -570,7 +564,6 @@
             const totalAccumulated = previousBalance + currentPeriodNet;
             const formatMoney = (val) => Math.abs(val).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2});
 
-            // อัปเดต UI ยอดสะสมและยอดคงเหลือ
             const accumEl = document.getElementById('total-accumulated-balance');
             if (totalAccumulated >= 0) {
                 accumEl.innerText = `฿${formatMoney(totalAccumulated)}`;
@@ -611,7 +604,6 @@
                 balanceIconEl.innerHTML = '<i class="fa-solid fa-equals"></i>';
             }
 
-            // เรนเดอร์ส่วน "สรุปค่าใช้จ่ายตามสมาชิก"
             const userSummaryContainer = document.getElementById('userExpenseSummary');
             userSummaryContainer.innerHTML = '';
             if (totalExpense > 0 && Object.keys(userTotals).length > 0) {
@@ -762,7 +754,7 @@
             });
         }
 
-        // ====== 2. กราฟแท่ง ======
+        // ====== 2. กราฟแท่ง (อัปเดต Data Label หมุนเป็นแนวตั้ง) ======
         function renderBarChart(groupedCategoryTotals, xAxisLabels, categoryColors, sortedCategories) {
             const ctx = document.getElementById('trendChart').getContext('2d');
 
@@ -834,7 +826,8 @@
                             color: '#1e293b',
                             anchor: 'end',
                             align: 'top', 
-                            offset: 2,
+                            offset: 4, // ขยับให้อยู่เหนือแท่งอีกนิด
+                            rotation: -90, // เพิ่มบรรทัดนี้เพื่อหมุนป้ายกำกับเป็นแนวตั้ง
                             font: { size: 10, weight: 'bold' },
                             clamp: true 
                         },
@@ -876,7 +869,6 @@
                 const userText = item.user ? `<span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full font-medium ml-1">${item.user}</span>` : '';
                 const noteText = item.note ? `<p class="text-xs text-gray-500 mt-1">${item.note}</p>` : '';
 
-                // แสดงปีด้วยหากเลือก View ที่กินเวลาข้ามปี
                 let dateDisplay = `<span class="text-base font-black leading-none">${day}</span>
                                    <span class="text-[10px] font-bold mt-0.5">${shortMonth}</span>`;
                 if (currentViewMode === 'year' || currentViewMode === '3months') {
