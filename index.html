@@ -666,59 +666,6 @@
 
             if (donutChartInstance) donutChartInstance.destroy();
 
-            const donutCalloutLines = {
-                id: 'donutCalloutLines',
-                afterDraw(chart) {
-                    const { ctx } = chart;
-                    const meta = chart.getDatasetMeta(0);
-                    if (!meta || !meta.data || meta.data.length === 0) return;
-                    if (chart.data.labels[0] === 'ไม่มีข้อมูล') return;
-
-                    ctx.save();
-                    meta.data.forEach((element, index) => {
-                        const { x, y, startAngle, endAngle, outerRadius } = element;
-                        const val = chart.data.datasets[0].data[index];
-                        if (!val || val <= 0) return;
-
-                        const label = chart.data.labels[index];
-                        const pct = totalExpense > 0 ? ((val / totalExpense) * 100).toFixed(0) : 0;
-
-                        const midAngle = startAngle + (endAngle - startAngle) / 2;
-                        const cosMid = Math.cos(midAngle);
-                        const sinMid = Math.sin(midAngle);
-                        
-                        const x1 = x + cosMid * outerRadius;
-                        const y1 = y + sinMid * outerRadius;
-                        
-                        const extLength = 16;
-                        const x2 = x + cosMid * (outerRadius + extLength);
-                        const y2 = y + sinMid * (outerRadius + extLength);
-
-                        const isRight = cosMid >= 0;
-                        const horizLength = 14;
-                        const x3 = isRight ? x2 + horizLength : x2 - horizLength;
-                        const y3 = y2;
-
-                        ctx.beginPath();
-                        ctx.moveTo(x1, y1);
-                        ctx.lineTo(x2, y2);
-                        ctx.lineTo(x3, y3);
-                        ctx.strokeStyle = backgroundColors[index] || '#cbd5e1';
-                        ctx.lineWidth = 1.5;
-                        ctx.stroke();
-
-                        ctx.font = 'bold 11px "Segoe UI", sans-serif';
-                        ctx.fillStyle = '#475569';
-                        ctx.textAlign = isRight ? 'left' : 'right';
-                        ctx.textBaseline = 'middle';
-                        
-                        const textOffset = isRight ? 4 : -4;
-                        ctx.fillText(`${label} ${pct}%`, x3 + textOffset, y3);
-                    });
-                    ctx.restore();
-                }
-            };
-
             donutChartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -733,10 +680,23 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    layout: { padding: { top: 30, bottom: 30, left: 70, right: 70 } },
+                    layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } },
                     plugins: {
                         legend: { display: false },
-                        datalabels: { display: false },
+                        datalabels: { 
+                            display: function(context) {
+                                if (sortedCategories.length === 0) return false;
+                                const val = context.dataset.data[context.dataIndex];
+                                const pct = totalExpense > 0 ? (val / totalExpense) * 100 : 0;
+                                return pct >= 5; // แสดงเฉพาะชิ้นที่ใหญ่กว่า 5% เพื่อป้องกันการทับซ้อน
+                            },
+                            color: '#ffffff',
+                            font: { size: 12, weight: 'bold' },
+                            formatter: function(value) {
+                                const pct = totalExpense > 0 ? ((value / totalExpense) * 100).toFixed(0) : 0;
+                                return pct + '%';
+                            }
+                        },
                         tooltip: {
                             enabled: sortedCategories.length > 0,
                             callbacks: {
@@ -748,13 +708,12 @@
                             }
                         }
                     },
-                    cutout: '62%'
-                },
-                plugins: [donutCalloutLines]
+                    cutout: '65%'
+                }
             });
         }
 
-        // ====== 2. กราฟแท่ง (อัปเดต Data Label หมุนเป็นแนวตั้ง) ======
+        // ====== 2. กราฟแท่ง ======
         function renderBarChart(groupedCategoryTotals, xAxisLabels, categoryColors, sortedCategories) {
             const ctx = document.getElementById('trendChart').getContext('2d');
 
@@ -826,8 +785,8 @@
                             color: '#1e293b',
                             anchor: 'end',
                             align: 'top', 
-                            offset: 4, // ขยับให้อยู่เหนือแท่งอีกนิด
-                            rotation: -90, // เพิ่มบรรทัดนี้เพื่อหมุนป้ายกำกับเป็นแนวตั้ง
+                            offset: 4, 
+                            rotation: -90, // คงไว้สำหรับหมุนป้ายกำกับแนวดิ่งกราฟแท่ง
                             font: { size: 10, weight: 'bold' },
                             clamp: true 
                         },
