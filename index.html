@@ -122,12 +122,6 @@
                     <div id="userExpenseSummary" class="space-y-1">
                         <!-- ข้อมูลจะถูกสร้างด้วย JS -->
                     </div>
-                    <div id="memberWeeklyTrendWrap" class="hidden mt-4 pt-4 border-t border-gray-100">
-                        <h4 class="text-xs font-bold mb-2 text-gray-500"><i class="fa-solid fa-chart-column mr-1.5"></i>แนวโน้มรายสัปดาห์ต่อสมาชิก</h4>
-                        <div class="relative h-52 w-full">
-                            <canvas id="memberTrendChart"></canvas>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -154,6 +148,12 @@
                     <h3 class="text-md font-bold text-gray-700">รายการบันทึก (<span class="period-text text-sm"></span>)</h3>
                     <span class="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">แตะเพื่อแก้ไข</span>
                 </div>
+                
+                <!-- FILTER BUTTONS -->
+                <div id="categoryFilterContainer" class="flex gap-2 overflow-x-auto hide-scroll mb-4 pb-2 border-b border-gray-100">
+                    <!-- ปุ่มจะสร้างด้วย JS -->
+                </div>
+
                 <div id="transactionDetails" class="space-y-3">
                     <!-- รายการจะถูกสร้างด้วย JS -->
                 </div>
@@ -216,31 +216,35 @@
 
     <!-- JS Logic -->
     <script>
+        // *** เปลี่ยน URL API Google Apps Script ของคุณที่นี่ ***
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwIRpGgZ2qiXCCgSzt89zwrc7lfsW-jrTSrAhN5IQa2BkXlw1XO2ul2UE8cA5W2P5hh/exec';
         
         Chart.register(ChartDataLabels);
 
         let donutChartInstance = null;
         let barChartInstance = null;
-        let memberTrendChartInstance = null;
         let allData = [];
         let editMode = false;
         let editRowId = null;
         let currentViewMode = 'month'; 
+        
+        // ตัวแปรสำหรับ Filter
+        let currentFilteredPeriodData = [];
+        let currentCategoryFilter = 'all';
 
-        // ชุดสีหลัก (categorical) คุมโทนเดียวกันทั้งชาร์ตแท่งและโดนัท แต่ยังไล่เฉดให้แยกแยะง่าย
-        // หมวดที่ไม่บ่อย/เบ็ดเตล็ดใช้โทนกลาง (เทา/สเลท) แทนสีสด เพื่อลดความลายตา
         const categoryColorMap = {
-            'อาหาร': '#2a78d6',              // blue
-            'เดินทาง': '#eb6834',            // orange
-            'บิล': '#eda100',                // yellow
-            'ของใช้ในบ้าน': '#1baf7a',         // aqua
-            'ของใช้ส่วนตัว': '#e87ba4',        // magenta
-            'ประกัน/ออม': '#4a3aa7',          // violet
-            'ผ่อนรถ': '#008300',             // green
-            'จ่ายหนี้บัตร/คืนเงิน': '#e34948',  // red
-            'ผ่อนบ้าน/คอนโด': '#64748b',       // slate (โทนกลาง)
-            'อื่นๆ': '#a8a6a0'                // warm gray (โทนกลาง)
+            'อาหาร': '#2a78d6',              
+            'เดินทาง': '#eb6834',            
+            'บิล': '#eda100',                
+            'ของใช้ในบ้าน': '#1baf7a',         
+            'ของใช้ส่วนตัว': '#e87ba4',        
+            'ประกัน/ออม': '#4a3aa7',          
+            'ผ่อนรถ': '#008300',             
+            'จ่ายหนี้บัตร/คืนเงิน': '#e34948',  
+            'ผ่อนบ้าน/คอนโด': '#64748b',       
+            'โรงแรม/ที่พัก': '#14b8a6',       
+            'ประกันรถยนต์': '#8b5cf6',        
+            'อื่นๆ': '#a8a6a0'                
         };
         const fallbackColors = ['#2a78d6', '#eb6834', '#eda100', '#1baf7a', '#e87ba4', '#4a3aa7', '#008300', '#e34948', '#64748b', '#a8a6a0'];
 
@@ -248,12 +252,11 @@
             return categoryColorMap[categoryName] || fallbackColors[index % fallbackColors.length];
         }
 
-        // ชุดสีสำหรับ "สมาชิก" แยกอิสระจากหมวดหมู่ ใช้โทนเดียวกันเพื่อความคุมโทนของทั้งแอป
         const memberColorMap = {
-            'ครอบครัว-ส่วนรวม': '#2a78d6',   // blue
-            'คุณพ่อ-ส่วนตัว': '#eb6834',      // orange
-            'คุณแม่-ส่วนตัว': '#e87ba4',      // magenta
-            'คุณลูก-ส่วนตัว': '#1baf7a'       // aqua
+            'ครอบครัว-ส่วนรวม': '#2a78d6',   
+            'คุณพ่อ-ส่วนตัว': '#eb6834',      
+            'คุณแม่-ส่วนตัว': '#e87ba4',      
+            'คุณลูก-ส่วนตัว': '#1baf7a'       
         };
         const memberFallbackColors = ['#4a3aa7', '#008300', '#eda100', '#e34948', '#64748b'];
 
@@ -271,6 +274,8 @@
                 { value: 'ประกัน/ออม', text: 'ประกันชีวิต/เงินออม' },
                 { value: 'ผ่อนรถ', text: 'ผ่อนรถ' },
                 { value: 'ผ่อนบ้าน/คอนโด', text: 'ผ่อนบ้าน/คอนโด' },
+                { value: 'โรงแรม/ที่พัก', text: 'โรงแรม/ที่พัก' },
+                { value: 'ประกันรถยนต์', text: 'ประกันรถยนต์' },
                 { value: 'จ่ายหนี้บัตร/คืนเงิน', text: '💳 จ่ายหนี้/คืนเงินกู้' },
                 { value: 'อื่นๆ', text: 'อื่นๆ' }
             ],
@@ -300,49 +305,18 @@
             else renderDashboard();
         });
 
+        // Initialize App
+        window.onload = function() {
+            updateCategoryOptions();
+            fetchData();
+        };
+
         function parseRowDate(dateStr) {
             if (typeof dateStr === 'string' && dateStr.includes('-')) {
                 const parts = dateStr.split('T')[0].split('-');
                 if (parts.length === 3) return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
             }
             return new Date(dateStr);
-        }
-
-        // หาช่วงเวลา "ก่อนหน้า" ที่มีความยาวเท่ากับช่วงที่กำลังดูอยู่ เพื่อใช้เทียบเปอร์เซ็นต์เปลี่ยนแปลง
-        function getPreviousPeriodRange(mode, startDate, endDate, filterMonth, filterYear) {
-            let prevStart, prevEnd;
-            if (mode === 'month') {
-                let pm = filterMonth - 1, py = filterYear;
-                if (pm < 1) { pm = 12; py -= 1; }
-                prevStart = new Date(py, pm - 1, 1);
-                prevEnd = new Date(py, pm, 0);
-            } else if (mode === 'year') {
-                prevStart = new Date(filterYear - 1, 0, 1);
-                prevEnd = new Date(filterYear - 1, 11, 31);
-            } else {
-                const spanDays = Math.round((endDate - startDate) / 86400000) + 1;
-                prevEnd = new Date(startDate);
-                prevEnd.setDate(prevEnd.getDate() - 1);
-                prevStart = new Date(prevEnd);
-                prevStart.setDate(prevStart.getDate() - (spanDays - 1));
-            }
-            return { prevStart, prevEnd };
-        }
-
-        function sumUserExpenses(start, end) {
-            const sOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-            const eOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-            const totals = {};
-            allData.forEach(row => {
-                if (row.type !== 'expense') return;
-                const d = parseRowDate(row.date);
-                const dOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-                if (dOnly >= sOnly && dOnly <= eOnly) {
-                    const u = row.user || 'ไม่ระบุ';
-                    totals[u] = (totals[u] || 0) + Number(row.amount);
-                }
-            });
-            return totals;
         }
 
         function updateCategoryOptions() {
@@ -440,7 +414,11 @@
                     fetchData();
                     switchTab('dashboard');
                 })
-                .catch(err => alert('เกิดข้อผิดพลาด กรุณาลองใหม่'));
+                .catch(err => {
+                    alert('เกิดข้อผิดพลาด กรุณาลองใหม่');
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                });
             }
         }
 
@@ -504,24 +482,106 @@
 
         function fetchData() {
             const btn = document.querySelector('button[onclick="fetchData()"]');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังดึงข้อมูล...';
+            if(btn) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังดึงข้อมูล...';
+                
+                fetch(SCRIPT_URL)
+                    .then(res => res.json())
+                    .then(data => {
+                        allData = data.map((item, index) => { return { ...item, sheetRow: index + 2 }; }); 
+                        updateYearSelectOptions();
+                        renderDashboard(); 
+                        btn.innerHTML = originalText;
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        btn.innerHTML = originalText;
+                        alert('ไม่สามารถโหลดข้อมูลได้ โปรดตรวจสอบ URL ของ Google Script');
+                    });
+            }
+        }
 
-            fetch(SCRIPT_URL)
-                .then(res => res.json())
-                .then(data => {
-                    allData = data.map((item, index) => { return { ...item, sheetRow: index + 2 }; }); 
-                    updateYearSelectOptions();
-                    renderDashboard(); 
-                    btn.innerHTML = originalText;
-                })
-                .catch(err => {
-                    console.error(err);
-                    btn.innerHTML = originalText;
+        // ฟังค์ชันสำหรับตั้งค่า Filter ปัจจุบัน แล้วอัปเดต UI
+        function setCategoryFilter(category) {
+            currentCategoryFilter = category;
+            renderCategoryFilters();
+            renderTransactionList();
+        }
+
+        // ฟังค์ชันสำหรับวาดปุ่ม Filter หมวดหมู่
+        function renderCategoryFilters() {
+            const container = document.getElementById('categoryFilterContainer');
+            if (!container) return;
+            
+            // ดึงหมวดหมู่ที่ไม่ซ้ำกันในข้อมูลปัจจุบัน (ของรอบเวลาที่เลือก)
+            const uniqueCategories = [...new Set(currentFilteredPeriodData.map(item => item.category || 'อื่นๆ'))];
+            
+            if (uniqueCategories.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            // ปุ่มรวมทั้งหมด
+            let html = `<button onclick="setCategoryFilter('all')" class="whitespace-nowrap px-4 py-1.5 rounded-full text-[13px] font-bold transition-all border ${currentCategoryFilter === 'all' ? 'bg-gray-800 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}">รวมทั้งหมด</button>`;
+            
+            // ปุ่มหมวดหมู่ย่อยๆ
+            uniqueCategories.forEach(cat => {
+                const isActive = currentCategoryFilter === cat;
+                const btnClass = isActive ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50';
+                html += `<button onclick="setCategoryFilter('${cat}')" class="whitespace-nowrap px-3 py-1.5 rounded-full text-[13px] font-medium transition-all border ${btnClass}">${cat}</button>`;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // ฟังค์ชันสำหรับวาดตาราง Transaction โดยอ้างอิงจาก Filter
+        function renderTransactionList() {
+            const transDiv = document.getElementById('transactionDetails');
+            transDiv.innerHTML = '';
+            
+            // กรองข้อมูลตามหมวดหมู่ที่ถูกเลือก
+            let displayData = currentFilteredPeriodData;
+            if (currentCategoryFilter !== 'all') {
+                displayData = currentFilteredPeriodData.filter(item => (item.category || 'อื่นๆ') === currentCategoryFilter);
+            }
+
+            if (displayData.length === 0) {
+                transDiv.innerHTML = '<div class="text-center p-6 text-gray-400 text-sm">ไม่มีรายการในหมวดนี้</div>';
+            } else {
+                displayData.forEach(row => {
+                    const isIncome = row.type === 'income';
+                    const amountStr = isIncome ? `+฿${parseFloat(row.amount).toLocaleString('th-TH')}` : `-฿${parseFloat(row.amount).toLocaleString('th-TH')}`;
+                    const amountColor = isIncome ? 'text-green-600' : 'text-red-500';
+                    const icon = isIncome ? '<i class="fa-solid fa-arrow-down text-green-500"></i>' : '<i class="fa-solid fa-arrow-up text-red-400"></i>';
+                    
+                    const d = parseRowDate(row.date);
+                    const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth()+1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
+                    
+                    transDiv.innerHTML += `
+                        <div onclick="editRecord(${row.sheetRow})" class="transaction-row flex justify-between items-center p-3 bg-gray-50 rounded-xl hover:bg-gray-100 cursor-pointer border border-transparent hover:border-gray-200 transition-all">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-gray-100">
+                                    ${icon}
+                                </div>
+                                <div>
+                                    <p class="text-sm font-bold text-gray-800 leading-tight">${row.category}</p>
+                                    <p class="text-[11px] text-gray-500 mt-0.5 line-clamp-1">${dateStr} • ${row.user || ''} ${row.note ? '• '+row.note : ''}</p>
+                                </div>
+                            </div>
+                            <span class="font-bold text-sm ${amountColor}">${amountStr}</span>
+                        </div>
+                    `;
                 });
+            }
         }
 
         function renderDashboard() {
+            if(allData.length === 0) return;
+
+            // รีเซ็ต Filter กลับเป็นทั้งหมด เมื่อมีการสลับมุมมองหรือโหลดข้อมูลใหม่
+            currentCategoryFilter = 'all';
+
             const now = new Date();
             now.setHours(0,0,0,0);
             
@@ -538,6 +598,7 @@
             
             const mNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
+            // จัดการเรื่อง Period ที่จะใช้กรองข้อมูล
             if (currentViewMode === 'month') {
                 startDate = new Date(filterYear, filterMonth - 1, 1);
                 endDate = new Date(filterYear, filterMonth, 0); 
@@ -576,458 +637,213 @@
                 periodText = `ปี ${filterYear+543}`;
             }
 
+            // Update UI text
             document.querySelectorAll('.period-text').forEach(el => el.innerText = periodText);
 
+            // คำนวณข้อมูล
+            let currentIncome = 0;
+            let currentExpense = 0;
             let previousBalance = 0; 
-            let totalIncome = 0; 
-            let totalExpense = 0; 
-            let categoryTotals = {};
-            let userTotals = {}; 
-            let viewTransactions = []; 
             
-            let groupedCategoryTotals = {};
-            xAxisLabels.forEach(lbl => groupedCategoryTotals[lbl] = {});
+            currentFilteredPeriodData = [];
+            let dailyExpenses = {};
+            let categoryTotals = {};
+            let userTotals = {};
 
-            // สำหรับมุมมอง "3 สัปดาห์ล่าสุด": เก็บยอดใช้จ่ายของแต่ละสมาชิกแยกเป็น 3 ก้อนตามสัปดาห์ (7 วัน/ก้อน)
-            const weeklyUserTotals = [{}, {}, {}];
-            const weeklyLabels = ['2 สัปดาห์ก่อน', 'สัปดาห์ที่แล้ว', 'สัปดาห์นี้'];
+            xAxisLabels.forEach(label => dailyExpenses[label] = 0);
 
-            const sDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-            const eDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+            const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+            const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
 
             allData.forEach(row => {
-                const rowDate = parseRowDate(row.date);
-                const rDateOnly = new Date(rowDate.getFullYear(), rowDate.getMonth(), rowDate.getDate());
-                const amt = Number(row.amount);
+                if (!row.date || !row.amount) return;
+                
+                const d = parseRowDate(row.date);
+                const dOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                const amount = parseFloat(row.amount);
+                const isExpense = row.type === 'expense';
+                const isIncome = row.type === 'income';
 
-                if (rDateOnly < sDateOnly) {
-                    if (row.type === 'income') previousBalance += amt;
-                    else if (row.type === 'expense') previousBalance -= amt;
+                // คำนวณยอดยกมา (ก่อนช่วงเวลาที่ดูอยู่)
+                if (dOnly < startOnly) {
+                    if (isIncome) previousBalance += amount;
+                    if (isExpense) previousBalance -= amount;
                 }
-                else if (rDateOnly >= sDateOnly && rDateOnly <= eDateOnly) {
-                    viewTransactions.push(row);
-                    if (row.type === 'income') {
-                        totalIncome += amt;
-                    } else if (row.type === 'expense') {
-                        totalExpense += amt;
-                        categoryTotals[row.category] = (categoryTotals[row.category] || 0) + amt;
 
-                        const userName = row.user || 'ไม่ระบุ';
-                        userTotals[userName] = (userTotals[userName] || 0) + amt;
-
-                        const key = groupByKey(rowDate);
-                        if(groupedCategoryTotals[key]) {
-                            groupedCategoryTotals[key][row.category] = (groupedCategoryTotals[key][row.category] || 0) + amt;
+                // ข้อมูลของช่วงเวลาปัจจุบัน
+                if (dOnly >= startOnly && dOnly <= endOnly) {
+                    currentFilteredPeriodData.push(row);
+                    
+                    if (isIncome) {
+                        currentIncome += amount;
+                    } else if (isExpense) {
+                        currentExpense += amount;
+                        
+                        // กราฟแท่ง
+                        const key = groupByKey(d);
+                        if (dailyExpenses[key] !== undefined) {
+                            dailyExpenses[key] += amount;
                         }
-
-                        if (currentViewMode === '3weeks') {
-                            const diffDays = Math.round((rDateOnly - sDateOnly) / 86400000);
-                            const bucketIndex = Math.min(2, Math.floor(diffDays / 7));
-                            weeklyUserTotals[bucketIndex][userName] = (weeklyUserTotals[bucketIndex][userName] || 0) + amt;
-                        }
+                        
+                        // หมวดหมู่
+                        const cat = row.category || 'อื่นๆ';
+                        categoryTotals[cat] = (categoryTotals[cat] || 0) + amount;
+                        
+                        // สมาชิก
+                        const u = row.user || 'ครอบครัว-ส่วนรวม';
+                        userTotals[u] = (userTotals[u] || 0) + amount;
                     }
                 }
             });
 
-            const { prevStart, prevEnd } = getPreviousPeriodRange(currentViewMode, startDate, endDate, filterMonth, filterYear);
-            const previousUserTotals = sumUserExpenses(prevStart, prevEnd);
-
-            const currentPeriodNet = totalIncome - totalExpense;
-            const totalAccumulated = previousBalance + currentPeriodNet;
-            const formatMoney = (val) => Math.abs(val).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2});
-
-            const accumEl = document.getElementById('total-accumulated-balance');
-            if (totalAccumulated >= 0) {
-                accumEl.innerText = `฿${formatMoney(totalAccumulated)}`;
-                accumEl.className = 'text-3xl md:text-4xl font-bold tracking-tight text-white';
-            } else {
-                accumEl.innerText = `- ฿${formatMoney(totalAccumulated)}`;
-                accumEl.className = 'text-3xl md:text-4xl font-bold tracking-tight text-red-400';
-            }
-
-            const prevEl = document.getElementById('previous-balance');
-            prevEl.innerText = previousBalance >= 0 ? `฿${formatMoney(previousBalance)}` : `- ฿${formatMoney(previousBalance)}`;
-            prevEl.className = previousBalance >= 0 ? 'text-slate-200 ml-1' : 'text-red-300 ml-1';
-
-            document.getElementById('income-total').innerText = totalIncome.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2});
-            document.getElementById('expense-total').innerText = totalExpense.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2});
-
-            const balanceEl = document.getElementById('net-balance');
-            const balanceCardEl = document.getElementById('balance-card');
-            const balanceIconEl = document.getElementById('balance-icon');
+            // --- อัปเดต Summary Cards ---
+            document.getElementById('previous-balance').innerText = `฿${previousBalance.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('income-total').innerText = currentIncome.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('expense-total').innerText = currentExpense.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
             
-            if (currentPeriodNet > 0) {
-                balanceEl.innerText = '+ ฿' + formatMoney(currentPeriodNet);
-                balanceEl.className = 'text-lg font-bold text-green-600';
-                balanceCardEl.className = 'glass-card rounded-2xl p-4 mb-4 flex items-center justify-between border-l-4 border-green-500 bg-green-50/30';
-                balanceIconEl.className = 'w-10 h-10 rounded-full flex items-center justify-center text-lg bg-green-100 text-green-600';
-                balanceIconEl.innerHTML = '<i class="fa-solid fa-arrow-trend-up"></i>';
-            } else if (currentPeriodNet < 0) {
-                balanceEl.innerText = '- ฿' + formatMoney(currentPeriodNet);
-                balanceEl.className = 'text-lg font-bold text-red-500';
-                balanceCardEl.className = 'glass-card rounded-2xl p-4 mb-4 flex items-center justify-between border-l-4 border-red-500 bg-red-50/30';
-                balanceIconEl.className = 'w-10 h-10 rounded-full flex items-center justify-center text-lg bg-red-100 text-red-500';
-                balanceIconEl.innerHTML = '<i class="fa-solid fa-arrow-trend-down"></i>';
+            const currentNet = currentIncome - currentExpense;
+            const netBalanceEl = document.getElementById('net-balance');
+            const balanceIcon = document.getElementById('balance-icon');
+            
+            netBalanceEl.innerText = `฿${currentNet.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            if (currentNet > 0) {
+                netBalanceEl.className = 'text-lg font-bold text-green-600';
+                balanceIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center text-lg bg-green-100 text-green-600';
+                balanceIcon.innerHTML = '<i class="fa-solid fa-arrow-trend-up"></i>';
+            } else if (currentNet < 0) {
+                netBalanceEl.className = 'text-lg font-bold text-red-500';
+                balanceIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center text-lg bg-red-100 text-red-500';
+                balanceIcon.innerHTML = '<i class="fa-solid fa-arrow-trend-down"></i>';
             } else {
-                balanceEl.innerText = '฿0';
-                balanceEl.className = 'text-lg font-bold text-gray-800';
-                balanceCardEl.className = 'glass-card rounded-2xl p-4 mb-4 flex items-center justify-between border-l-4 border-gray-400';
-                balanceIconEl.className = 'w-10 h-10 rounded-full flex items-center justify-center text-lg bg-gray-100 text-gray-600';
-                balanceIconEl.innerHTML = '<i class="fa-solid fa-equals"></i>';
+                netBalanceEl.className = 'text-lg font-bold text-gray-500';
+                balanceIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center text-lg bg-gray-100 text-gray-500';
+                balanceIcon.innerHTML = '<i class="fa-solid fa-equals"></i>';
             }
 
+            const totalAccumulated = previousBalance + currentNet;
+            document.getElementById('total-accumulated-balance').innerText = `฿${totalAccumulated.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+            // --- Render User Summary ---
+            const userSummaryDiv = document.getElementById('userExpenseSummary');
+            userSummaryDiv.innerHTML = '';
+            
             const sortedUsers = Object.entries(userTotals).sort((a, b) => b[1] - a[1]);
-            renderMemberSummary(sortedUsers, totalExpense, previousUserTotals, periodText);
-
-            const memberTrendWrap = document.getElementById('memberWeeklyTrendWrap');
-            if (currentViewMode === '3weeks' && sortedUsers.length > 0) {
-                memberTrendWrap.classList.remove('hidden');
-                renderMemberWeeklyTrendChart(sortedUsers, weeklyUserTotals, weeklyLabels);
-            } else {
-                memberTrendWrap.classList.add('hidden');
-                if (memberTrendChartInstance) { memberTrendChartInstance.destroy(); memberTrendChartInstance = null; }
-            }
-
-            const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
-            const categoryColors = {};
-            sortedCategories.forEach((item, index) => { 
-                categoryColors[item[0]] = getCategoryColor(item[0], index); 
-            });
-
-            renderDonutChart(sortedCategories, totalExpense, categoryColors, periodText);
-            renderBarChart(groupedCategoryTotals, xAxisLabels, categoryColors, sortedCategories);
-            renderTransactionDetails(viewTransactions, periodText); 
-        }
-
-        // ====== 0. สรุปค่าใช้จ่ายตามสมาชิก (อันดับ + แถบสัดส่วน + เทียบช่วงก่อนหน้า) ======
-        function renderMemberSummary(sortedUsers, totalExpense, previousUserTotals, periodText) {
-            const container = document.getElementById('userExpenseSummary');
-            container.innerHTML = '';
-
-            if (totalExpense <= 0 || sortedUsers.length === 0) {
-                container.innerHTML = `<p class="text-xs text-gray-400 w-full py-2">ไม่มีข้อมูลค่าใช้จ่ายใน ${periodText}</p>`;
-                return;
-            }
-
-            const rankStyles = [
-                { badge: 'bg-amber-100 text-amber-600', label: '<i class="fa-solid fa-crown text-[10px]"></i>' },
-                { badge: 'bg-slate-100 text-slate-500', label: '2' },
-                { badge: 'bg-orange-100 text-orange-500', label: '3' }
-            ];
-
-            sortedUsers.forEach(([userName, amount], index) => {
-                const percent = ((amount / totalExpense) * 100).toFixed(1);
-                const color = getMemberColor(userName, index);
-                const rankStyle = rankStyles[index] || { badge: 'bg-gray-100 text-gray-400', label: (index + 1).toString() };
-                const amountFmt = amount.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-
-                const prevAmount = previousUserTotals[userName] || 0;
-                let deltaHtml = '';
-                if (prevAmount > 0) {
-                    const change = ((amount - prevAmount) / prevAmount) * 100;
-                    if (Math.abs(change) < 0.5) {
-                        deltaHtml = `<span class="text-[10px] font-medium text-gray-400"><i class="fa-solid fa-minus mr-0.5"></i>ไม่เปลี่ยนแปลง</span>`;
-                    } else if (change > 0) {
-                        deltaHtml = `<span class="text-[10px] font-bold text-red-500"><i class="fa-solid fa-arrow-up mr-0.5"></i>${change.toFixed(0)}% จากช่วงก่อน</span>`;
-                    } else {
-                        deltaHtml = `<span class="text-[10px] font-bold text-green-600"><i class="fa-solid fa-arrow-down mr-0.5"></i>${Math.abs(change).toFixed(0)}% จากช่วงก่อน</span>`;
-                    }
-                } else {
-                    deltaHtml = `<span class="text-[10px] font-bold text-blue-500"><i class="fa-solid fa-sparkles mr-0.5"></i>ใหม่ในช่วงนี้</span>`;
-                }
-
-                container.innerHTML += `
-                    <div class="flex items-center gap-3 py-2 ${index < sortedUsers.length - 1 ? 'border-b border-gray-100' : ''}">
-                        <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${rankStyle.badge}">${rankStyle.label}</div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex justify-between items-baseline gap-2 mb-1">
-                                <span class="text-sm font-bold text-gray-700 truncate">${userName}</span>
-                                <span class="text-sm font-bold text-gray-800 flex-shrink-0">฿${amountFmt}</span>
-                            </div>
-                            <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                <div class="h-1.5 rounded-full" style="width:${percent}%; background-color:${color};"></div>
-                            </div>
-                            <div class="flex justify-between items-center mt-1">
-                                <span class="text-[10px] text-gray-400">${percent}% ของยอดรวม</span>
-                                ${deltaHtml}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        // ====== 0.1 แนวโน้มรายสัปดาห์ต่อสมาชิก (เฉพาะมุมมอง 3 สัปดาห์ล่าสุด) ======
-        function renderMemberWeeklyTrendChart(sortedUsers, weeklyUserTotals, weeklyLabels) {
-            const ctx = document.getElementById('memberTrendChart').getContext('2d');
-
-            const datasets = sortedUsers.map(([userName], index) => ({
-                label: userName,
-                data: weeklyUserTotals.map(wk => wk[userName] || 0),
-                backgroundColor: getMemberColor(userName, index),
-                borderRadius: 3,
-                maxBarThickness: 56
-            }));
-
-            if (memberTrendChartInstance) memberTrendChartInstance.destroy();
-
-            memberTrendChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: { labels: weeklyLabels, datasets: datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 } } },
-                        y: { stacked: true, beginAtZero: true, grace: '10%', grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } }
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top',
-                            align: 'center',
-                            labels: { boxWidth: 10, padding: 10, usePointStyle: true, font: { size: 10, family: 'Segoe UI' } }
-                        },
-                        datalabels: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return ` ${context.dataset.label}: ฿${context.raw.toLocaleString('th-TH')}`;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // ====== 1. กราฟโดนัท ======
-        function renderDonutChart(sortedCategories, totalExpense, categoryColors, periodText) {
-            const ctx = document.getElementById('expenseChart').getContext('2d');
-            const labels = sortedCategories.length > 0 ? sortedCategories.map(item => item[0]) : ['ไม่มีข้อมูล'];
-            const dataValues = sortedCategories.length > 0 ? sortedCategories.map(item => item[1]) : [1];
-            const backgroundColors = sortedCategories.length > 0 ? labels.map(label => categoryColors[label]) : ['#e2e8f0'];
-
-            const listContainer = document.getElementById('categoryList');
-            listContainer.innerHTML = '';
             
-            if (sortedCategories.length === 0) {
-                listContainer.innerHTML = `<p class="text-center text-sm text-gray-400 py-4">ไม่มีข้อมูลรายจ่ายใน ${periodText}</p>`;
+            if (sortedUsers.length === 0) {
+                userSummaryDiv.innerHTML = '<p class="text-sm text-gray-400 italic">ไม่มีข้อมูลในรอบนี้</p>';
             } else {
-                sortedCategories.forEach((item) => {
-                    const catName = item[0];
-                    const amount = item[1];
-                    const percent = totalExpense > 0 ? ((amount / totalExpense) * 100).toFixed(1) : 0;
-                    listContainer.innerHTML += `
-                        <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                            <span class="text-sm text-gray-600 flex items-center font-medium">
-                                <span class="w-3 h-3 inline-block rounded-full mr-2" style="background-color: ${categoryColors[catName]}; border: 1px solid #e5e7eb;"></span>
-                                ${catName} <span class="text-xs text-gray-400 ml-2">${percent}%</span>
-                            </span>
-                            <span class="text-sm font-bold text-gray-800">฿${amount.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</span>
+                sortedUsers.forEach(([u, total], index) => {
+                    const percent = currentExpense > 0 ? ((total / currentExpense) * 100).toFixed(1) : 0;
+                    const color = getMemberColor(u, index);
+                    
+                    userSummaryDiv.innerHTML += `
+                        <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full" style="background-color: ${color}"></div>
+                                <span class="text-sm text-gray-700 font-medium">${u}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-sm font-bold text-gray-800">฿${total.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                                <span class="text-xs text-gray-500 ml-1">(${percent}%)</span>
+                            </div>
                         </div>
                     `;
                 });
             }
 
-            if (donutChartInstance) donutChartInstance.destroy();
-
-            donutChartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: dataValues,
-                        backgroundColor: backgroundColors,
-                        borderWidth: 2,
-                        borderColor: '#ffffff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } },
-                    plugins: {
-                        legend: { display: false },
-                        datalabels: { 
-                            display: function(context) {
-                                if (sortedCategories.length === 0) return false;
-                                const val = context.dataset.data[context.dataIndex];
-                                const pct = totalExpense > 0 ? (val / totalExpense) * 100 : 0;
-                                return pct >= 5; // แสดงเฉพาะชิ้นที่ใหญ่กว่า 5% เพื่อป้องกันการทับซ้อน
-                            },
-                            color: '#ffffff',
-                            font: { size: 12, weight: 'bold' },
-                            formatter: function(value) {
-                                const pct = totalExpense > 0 ? ((value / totalExpense) * 100).toFixed(0) : 0;
-                                return pct + '%';
-                            }
-                        },
-                        tooltip: {
-                            enabled: sortedCategories.length > 0,
-                            callbacks: {
-                                label: function(context) {
-                                    const val = context.raw || 0;
-                                    const pct = totalExpense > 0 ? ((val / totalExpense) * 100).toFixed(1) : 0;
-                                    return ` ${context.label}: ฿${val.toLocaleString('th-TH')} (${pct}%)`;
-                                }
-                            }
-                        }
-                    },
-                    cutout: '65%'
-                }
-            });
-        }
-
-        // ====== 2. กราฟแท่ง ======
-        function renderBarChart(groupedCategoryTotals, xAxisLabels, categoryColors, sortedCategories) {
-            const ctx = document.getElementById('trendChart').getContext('2d');
-
-            const datasets = sortedCategories.map(([catName]) => {
-                return {
-                    label: catName,
-                    data: xAxisLabels.map(lbl => groupedCategoryTotals[lbl][catName] || 0),
-                    backgroundColor: categoryColors[catName],
-                    borderRadius: 3
-                };
-            });
-
+            // --- Render Bar Chart ---
+            const barData = xAxisLabels.map(label => dailyExpenses[label]);
             if (barChartInstance) barChartInstance.destroy();
-
-            barChartInstance = new Chart(ctx, {
+            const barCtx = document.getElementById('trendChart').getContext('2d');
+            barChartInstance = new Chart(barCtx, {
                 type: 'bar',
                 data: {
                     labels: xAxisLabels,
-                    datasets: datasets
+                    datasets: [{
+                        label: 'รายจ่าย (บาท)',
+                        data: barData,
+                        backgroundColor: '#ef4444',
+                        borderRadius: 4
+                    }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            stacked: true,
-                            grid: { display: false },
-                            ticks: { font: { size: 10 } }
-                        },
-                        y: {
-                            stacked: true,
-                            beginAtZero: true,
-                            grace: '15%',
-                            grid: { color: '#f1f5f9' },
-                            ticks: { font: { size: 10 } }
-                        }
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false },
+                        datalabels: { display: false }
                     },
+                    scales: {
+                        y: { beginAtZero: true, grid: { borderDash: [4, 4] } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            // --- Render Donut Chart ---
+            const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+            const catLabels = sortedCategories.map(item => item[0]);
+            const catData = sortedCategories.map(item => item[1]);
+            const catColors = catLabels.map((label, index) => getCategoryColor(label, index));
+
+            if (donutChartInstance) donutChartInstance.destroy();
+            const pieCtx = document.getElementById('expenseChart').getContext('2d');
+            donutChartInstance = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: catLabels,
+                    datasets: [{ data: catData, backgroundColor: catColors, borderWidth: 2, borderColor: '#ffffff' }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '65%',
                     plugins: {
-                        legend: { 
-                            display: true,
-                            position: 'top',
-                            align: 'center',
-                            labels: {
-                                boxWidth: 10,
-                                padding: 12,
-                                usePointStyle: true,
-                                font: { size: 11, family: 'Segoe UI' }
-                            }
-                        },
+                        legend: { display: false },
                         datalabels: {
-                            display: function(context) {
-                                const datasetArray = context.chart.data.datasets;
-                                let lastVisibleIndex = -1;
-                                for (let i = datasetArray.length - 1; i >= 0; i--) {
-                                    if (datasetArray[i].data[context.dataIndex] > 0) {
-                                        lastVisibleIndex = i;
-                                        break;
-                                    }
-                                }
-                                return context.datasetIndex === lastVisibleIndex;
-                            },
-                            formatter: function(value, context) {
+                            color: '#fff',
+                            font: { weight: 'bold', size: 11 },
+                            formatter: (value, ctx) => {
                                 let sum = 0;
-                                context.chart.data.datasets.forEach(dataset => {
-                                    sum += dataset.data[context.dataIndex] || 0;
-                                });
-                                return sum > 0 ? '฿' + Math.round(sum).toLocaleString('th-TH') : '';
-                            },
-                            color: '#1e293b',
-                            anchor: 'end',
-                            align: 'top', 
-                            offset: 4, 
-                            rotation: -90, // คงไว้สำหรับหมุนป้ายกำกับแนวดิ่งกราฟแท่ง
-                            font: { size: 10, weight: 'bold' },
-                            clamp: true 
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return ` ${context.dataset.label}: ฿${context.raw.toLocaleString('th-TH')}`;
-                                }
+                                let dataArr = ctx.chart.data.datasets[0].data;
+                                dataArr.map(data => { sum += data; });
+                                let percentage = (value * 100 / sum).toFixed(0) + "%";
+                                return percentage === "0%" ? "" : percentage;
                             }
                         }
                     }
                 }
             });
-        }
 
-        // ====== 3. แสดงรายการธุรกรรม ======
-        function renderTransactionDetails(transactions, periodText) {
-            const container = document.getElementById('transactionDetails');
-            container.innerHTML = '';
-
-            if (!transactions || transactions.length === 0) {
-                container.innerHTML = `<p class="text-center text-sm text-gray-400 py-6">ไม่มีรายการบันทึกใน ${periodText}</p>`;
-                return;
+            // Category Legend List
+            const catListDiv = document.getElementById('categoryList');
+            catListDiv.innerHTML = '';
+            if (sortedCategories.length === 0) {
+                catListDiv.innerHTML = '<p class="text-sm text-gray-400 italic text-center">ไม่มีรายการใช้จ่าย</p>';
+            } else {
+                sortedCategories.forEach(([cat, amt], index) => {
+                    const percent = currentExpense > 0 ? ((amt / currentExpense) * 100).toFixed(1) : 0;
+                    catListDiv.innerHTML += `
+                        <div class="flex justify-between items-center text-sm p-1.5 hover:bg-gray-50 rounded-lg transition-colors">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 rounded-full" style="background-color: ${catColors[index]}"></span>
+                                <span class="font-medium text-gray-700">${cat}</span>
+                            </div>
+                            <div>
+                                <span class="font-bold text-gray-800">฿${amt.toLocaleString('th-TH')}</span>
+                                <span class="text-gray-400 text-xs w-10 inline-block text-right">${percent}%</span>
+                            </div>
+                        </div>
+                    `;
+                });
             }
 
-            const sorted = [...transactions].sort((a, b) => parseRowDate(b.date) - parseRowDate(a.date));
-
-            sorted.forEach(item => {
-                const dateObj = parseRowDate(item.date);
-                const day = dateObj.getDate();
-                const shortMonth = dateObj.toLocaleDateString('th-TH', { month: 'short' });
-                const year = dateObj.getFullYear().toString().slice(-2);
-                
-                const isIncome = item.type === 'income';
-                const amountText = (isIncome ? '+฿' : '-฿') + Number(item.amount).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-                const amountClass = isIncome ? 'text-green-600 font-bold' : 'text-red-500 font-bold';
-                const bgBadge = isIncome ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200';
-
-                const userText = item.user ? `<span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full font-medium ml-1">${item.user}</span>` : '';
-                const noteText = item.note ? `<p class="text-xs text-gray-500 mt-1">${item.note}</p>` : '';
-
-                let dateDisplay = `<span class="text-base font-black leading-none">${day}</span>
-                                   <span class="text-[10px] font-bold mt-0.5">${shortMonth}</span>`;
-                if (currentViewMode === 'year' || currentViewMode === '3months') {
-                    dateDisplay = `<span class="text-base font-black leading-none">${day}</span>
-                                   <span class="text-[9px] font-bold mt-0.5">${shortMonth} ${year}</span>`;
-                }
-
-                const card = document.createElement('div');
-                card.className = 'transaction-row p-3 rounded-xl border border-gray-100 bg-white hover:border-gray-300 transition-all cursor-pointer flex justify-between items-center shadow-sm';
-                card.onclick = () => editRecord(item.sheetRow);
-
-                card.innerHTML = `
-                    <div class="flex items-center space-x-3">
-                        <div class="w-12 h-11 flex-shrink-0 rounded-xl border flex flex-col items-center justify-center shadow-sm ${bgBadge}">
-                            ${dateDisplay}
-                        </div>
-                        <div>
-                            <div class="flex items-center text-sm font-bold text-gray-800">
-                                ${item.category} ${userText}
-                            </div>
-                            ${noteText}
-                        </div>
-                    </div>
-                    <div class="text-right ${amountClass} text-sm">
-                        ${amountText}
-                    </div>
-                `;
-                container.appendChild(card);
-            });
+            // --- จัดเรียงและวาดส่วนตาราง Transaction ด้านล่างสุด ---
+            // เรียงข้อมูลจากวันที่ล่าสุด
+            currentFilteredPeriodData.sort((a, b) => parseRowDate(b.date) - parseRowDate(a.date));
+            
+            // เรียกฟังก์ชั่นเพื่อวาดปุ่มหมวดหมู่ และวาดตาราง
+            renderCategoryFilters();
+            renderTransactionList();
         }
-
-        // เริ่มต้นการทำงาน
-        updateCategoryOptions();
-        fetchData();
     </script>
 </body>
 </html>
