@@ -108,7 +108,8 @@
                 <!-- สถานะ -->
                 <div id="balance-card" class="glass-card rounded-2xl p-4 mb-4 flex items-center justify-between">
                     <div>
-                        <p class="text-sm font-medium text-gray-500 mb-1">สรุปผลรายรับ-รายจ่าย (<span class="period-text"></span>)</p>
+                        <!-- เปลี่ยนชื่อเป็น เงินคงเหลือสุทธิ (รวมยอดยกมา) -->
+                        <p class="text-sm font-medium text-gray-500 mb-1">เงินคงเหลือสุทธิ (รวมยอดยกมา) (<span class="period-text"></span>)</p>
                         <h3 class="text-lg font-bold" id="net-balance">฿0</h3>
                     </div>
                     <div id="balance-icon" class="w-10 h-10 rounded-full flex items-center justify-center text-lg">
@@ -149,8 +150,8 @@
                     <span class="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">แตะเพื่อแก้ไข</span>
                 </div>
                 
-                <!-- FILTER BUTTONS -->
-                <div id="categoryFilterContainer" class="flex gap-2 overflow-x-auto hide-scroll mb-4 pb-2 border-b border-gray-100">
+                <!-- FILTER BUTTONS แก้ไข flex-wrap ให้ปุ่มตกบรรทัดใหม่ -->
+                <div id="categoryFilterContainer" class="flex flex-wrap gap-2 mb-4 pb-3 border-b border-gray-100">
                     <!-- ปุ่มจะสร้างด้วย JS -->
                 </div>
 
@@ -350,16 +351,14 @@
             }
         }
 
-        // --- แก้ไขการจัดการ Class เวลากดสลับมุมมอง ---
+        // การจัดการ Class เวลากดสลับมุมมอง
         function setViewMode(mode) {
             currentViewMode = mode;
             document.querySelectorAll('.view-btn').forEach(btn => {
                 if(btn.dataset.mode === mode) {
-                    // ปุ่มที่ถูกเลือก: ใส่สีฟ้า และเอาคลาส hover:bg-gray-100 ออก เพื่อแก้ปัญหาบั๊กสีทับกัน
                     btn.classList.add('bg-blue-600', 'text-white', 'shadow-md', 'font-bold');
                     btn.classList.remove('bg-transparent', 'text-gray-600', 'hover:bg-gray-100', 'font-medium');
                 } else {
-                    // ปุ่มที่ไม่ถูกเลือก: โปร่งใส และใส่ hover:bg-gray-100 กลับเข้าไป
                     btn.classList.remove('bg-blue-600', 'text-white', 'shadow-md', 'font-bold');
                     btn.classList.add('bg-transparent', 'text-gray-600', 'hover:bg-gray-100', 'font-medium');
                 }
@@ -519,7 +518,6 @@
             const container = document.getElementById('categoryFilterContainer');
             if (!container) return;
             
-            // ดึงหมวดหมู่ที่ไม่ซ้ำกันในข้อมูลปัจจุบัน (ของรอบเวลาที่เลือก)
             const uniqueCategories = [...new Set(currentFilteredPeriodData.map(item => item.category || 'อื่นๆ'))];
             
             if (uniqueCategories.length === 0) {
@@ -527,10 +525,8 @@
                 return;
             }
 
-            // ปุ่มรวมทั้งหมด
             let html = `<button onclick="setCategoryFilter('all')" class="whitespace-nowrap px-4 py-1.5 rounded-full text-[13px] font-bold transition-all border ${currentCategoryFilter === 'all' ? 'bg-gray-800 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}">รวมทั้งหมด</button>`;
             
-            // ปุ่มหมวดหมู่ย่อยๆ
             uniqueCategories.forEach(cat => {
                 const isActive = currentCategoryFilter === cat;
                 const btnClass = isActive ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50';
@@ -540,12 +536,11 @@
             container.innerHTML = html;
         }
 
-        // --- แก้ไขส่วนตาราง Transaction เพื่อแสดงวันที่แทนลูกศร ---
+        // ส่วนตาราง Transaction
         function renderTransactionList() {
             const transDiv = document.getElementById('transactionDetails');
             transDiv.innerHTML = '';
             
-            // กรองข้อมูลตามหมวดหมู่ที่ถูกเลือก
             let displayData = currentFilteredPeriodData;
             if (currentCategoryFilter !== 'all') {
                 displayData = currentFilteredPeriodData.filter(item => (item.category || 'อื่นๆ') === currentCategoryFilter);
@@ -565,7 +560,6 @@
                     const day = d.getDate().toString();
                     const monthStr = mNamesShort[d.getMonth()];
                     
-                    // สร้างไอคอนเป็นวันที่และเดือน
                     const dateIcon = `
                         <div class="flex flex-col items-center justify-center leading-none">
                             <span class="text-[14px] font-bold text-gray-700">${day}</span>
@@ -594,7 +588,6 @@
         function renderDashboard() {
             if(allData.length === 0) return;
 
-            // รีเซ็ต Filter กลับเป็นทั้งหมด เมื่อมีการสลับมุมมองหรือโหลดข้อมูลใหม่
             currentCategoryFilter = 'all';
 
             const now = new Date();
@@ -613,7 +606,6 @@
             
             const mNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
-            // จัดการเรื่อง Period ที่จะใช้กรองข้อมูล
             if (currentViewMode === 'month') {
                 startDate = new Date(filterYear, filterMonth - 1, 1);
                 endDate = new Date(filterYear, filterMonth, 0); 
@@ -652,10 +644,8 @@
                 periodText = `ปี ${filterYear+543}`;
             }
 
-            // Update UI text
             document.querySelectorAll('.period-text').forEach(el => el.innerText = periodText);
 
-            // คำนวณข้อมูล
             let currentIncome = 0;
             let currentExpense = 0;
             let previousBalance = 0; 
@@ -679,13 +669,11 @@
                 const isExpense = row.type === 'expense';
                 const isIncome = row.type === 'income';
 
-                // คำนวณยอดยกมา (ก่อนช่วงเวลาที่ดูอยู่)
                 if (dOnly < startOnly) {
                     if (isIncome) previousBalance += amount;
                     if (isExpense) previousBalance -= amount;
                 }
 
-                // ข้อมูลของช่วงเวลาปัจจุบัน
                 if (dOnly >= startOnly && dOnly <= endOnly) {
                     currentFilteredPeriodData.push(row);
                     
@@ -694,39 +682,39 @@
                     } else if (isExpense) {
                         currentExpense += amount;
                         
-                        // กราฟแท่ง
                         const key = groupByKey(d);
                         if (dailyExpenses[key] !== undefined) {
                             dailyExpenses[key] += amount;
                         }
                         
-                        // หมวดหมู่
                         const cat = row.category || 'อื่นๆ';
                         categoryTotals[cat] = (categoryTotals[cat] || 0) + amount;
                         
-                        // สมาชิก
                         const u = row.user || 'ครอบครัว-ส่วนรวม';
                         userTotals[u] = (userTotals[u] || 0) + amount;
                     }
                 }
             });
 
-            // --- อัปเดต Summary Cards ---
             document.getElementById('previous-balance').innerText = `฿${previousBalance.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             document.getElementById('income-total').innerText = currentIncome.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('expense-total').innerText = currentExpense.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
             
             const currentNet = currentIncome - currentExpense;
+            // คำนวณรวมยอดยกมา
+            const totalWithPrevious = previousBalance + currentNet;
+            
             const netBalanceEl = document.getElementById('net-balance');
             const balanceIcon = document.getElementById('balance-icon');
             
-            netBalanceEl.innerText = `฿${currentNet.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            // ใช้ totalWithPrevious ในการแสดงผล
+            netBalanceEl.innerText = `฿${totalWithPrevious.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             
-            if (currentNet > 0) {
+            if (totalWithPrevious > 0) {
                 netBalanceEl.className = 'text-lg font-bold text-green-600';
                 balanceIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center text-lg bg-green-100 text-green-600';
                 balanceIcon.innerHTML = '<i class="fa-solid fa-arrow-trend-up"></i>';
-            } else if (currentNet < 0) {
+            } else if (totalWithPrevious < 0) {
                 netBalanceEl.className = 'text-lg font-bold text-red-500';
                 balanceIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center text-lg bg-red-100 text-red-500';
                 balanceIcon.innerHTML = '<i class="fa-solid fa-arrow-trend-down"></i>';
@@ -851,11 +839,8 @@
                 });
             }
 
-            // --- จัดเรียงและวาดส่วนตาราง Transaction ด้านล่างสุด ---
-            // เรียงข้อมูลจากวันที่ล่าสุด
+            // จัดเรียงและวาดตาราง Transaction
             currentFilteredPeriodData.sort((a, b) => parseRowDate(b.date) - parseRowDate(a.date));
-            
-            // เรียกฟังก์ชั่นเพื่อวาดปุ่มหมวดหมู่ และวาดตาราง
             renderCategoryFilters();
             renderTransactionList();
         }
