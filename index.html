@@ -126,7 +126,7 @@
                 </div>
             </div>
 
-            <!-- Chart: Trend Bar Chart -->
+            <!-- Chart: Trend Bar Chart (Stacked) -->
             <div class="glass-card rounded-2xl p-5">
                 <h3 class="text-md font-bold mb-2 text-gray-700">แนวโน้มรายจ่าย (บาท)</h3>
                 <div class="relative h-80 w-full">
@@ -220,6 +220,7 @@
         // *** เปลี่ยน URL API Google Apps Script ของคุณที่นี่ ***
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwIRpGgZ2qiXCCgSzt89zwrc7lfsW-jrTSrAhN5IQa2BkXlw1XO2ul2UE8cA5W2P5hh/exec';
         
+        // Register Plugin globally for charts
         Chart.register(ChartDataLabels);
 
         let donutChartInstance = null;
@@ -351,7 +352,6 @@
             }
         }
 
-        // การจัดการ Class เวลากดสลับมุมมอง
         function setViewMode(mode) {
             currentViewMode = mode;
             document.querySelectorAll('.view-btn').forEach(btn => {
@@ -506,14 +506,12 @@
             }
         }
 
-        // ฟังค์ชันสำหรับตั้งค่า Filter ปัจจุบัน แล้วอัปเดต UI
         function setCategoryFilter(category) {
             currentCategoryFilter = category;
             renderCategoryFilters();
             renderTransactionList();
         }
 
-        // ฟังค์ชันสำหรับวาดปุ่ม Filter หมวดหมู่
         function renderCategoryFilters() {
             const container = document.getElementById('categoryFilterContainer');
             if (!container) return;
@@ -536,7 +534,6 @@
             container.innerHTML = html;
         }
 
-        // ส่วนตาราง Transaction
         function renderTransactionList() {
             const transDiv = document.getElementById('transactionDetails');
             transDiv.innerHTML = '';
@@ -651,11 +648,11 @@
             let previousBalance = 0; 
             
             currentFilteredPeriodData = [];
-            let dailyExpenses = {};
+            
+            // เตรียมตัวแปรสำหรับกราฟ Stacked Bar
+            let dailyCategoryExpenses = {}; 
             let categoryTotals = {};
             let userTotals = {};
-
-            xAxisLabels.forEach(label => dailyExpenses[label] = 0);
 
             const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
             const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
@@ -683,11 +680,14 @@
                         currentExpense += amount;
                         
                         const key = groupByKey(d);
-                        if (dailyExpenses[key] !== undefined) {
-                            dailyExpenses[key] += amount;
-                        }
-                        
                         const cat = row.category || 'อื่นๆ';
+
+                        // เก็บรายจ่ายแยกหมวดหมู่และแยกตามวัน (สำหรับ Stacked Bar Chart)
+                        if (!dailyCategoryExpenses[cat]) {
+                            dailyCategoryExpenses[cat] = {};
+                        }
+                        dailyCategoryExpenses[cat][key] = (dailyCategoryExpenses[cat][key] || 0) + amount;
+                        
                         categoryTotals[cat] = (categoryTotals[cat] || 0) + amount;
                         
                         const u = row.user || 'ครอบครัว-ส่วนรวม';
@@ -701,13 +701,11 @@
             document.getElementById('expense-total').innerText = currentExpense.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
             
             const currentNet = currentIncome - currentExpense;
-            // คำนวณรวมยอดยกมา
             const totalWithPrevious = previousBalance + currentNet;
             
             const netBalanceEl = document.getElementById('net-balance');
             const balanceIcon = document.getElementById('balance-icon');
             
-            // ใช้ totalWithPrevious ในการแสดงผล
             netBalanceEl.innerText = `฿${totalWithPrevious.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             
             if (totalWithPrevious > 0) {
@@ -755,40 +753,119 @@
                 });
             }
 
-            // --- Render Bar Chart ---
-            const barData = xAxisLabels.map(label => dailyExpenses[label]);
+            // จัดเรียงหมวดหมู่ตามยอดเงิน (มากไปน้อย) เพื่อความสวยงามในกราฟ
+            const sortedCategories = Object.keys(categoryTotals).sort((a, b) => categoryTotals[b] - categoryTotals[a]);
+            const catLabels = sortedCategories;
+            const catData = sortedCategories.map(cat => categoryTotals[cat]);
+            const catColors = sortedCategories.map((cat, index) => getCategoryColor(cat, index));
+
+            // --- Render Stacked Bar Chart ---
+            // สร้าง Dataset สำหรับแต่ละหมวดหมู่
+            const barDatasets = sortedCategories.map((cat, index) => {
+                const data = xAxisLabels.map(label => {
+                    return (dailyCategoryExpenses[cat] && dailyCategoryExpenses[cat][label]) ? dailyCategoryExpenses[cat][label] : 0;
+                });
+                return {
+                    label: cat,
+                    data: data,
+                    backgroundColor: catColors[index],
+                    borderWidth: 1,
+                    borderColor: '#ffffff'
+                };
+            });
+
             if (barChartInstance) barChartInstance.destroy();
             const barCtx = document.getElementById('trendChart').getContext('2d');
             barChartInstance = new Chart(barCtx, {
                 type: 'bar',
                 data: {
                     labels: xAxisLabels,
-                    datasets: [{
-                        label: 'รายจ่าย (บาท)',
-                        data: barData,
-                        backgroundColor: '#ef4444',
-                        borderRadius: 4
-                    }]
+                    datasets: barDatasets
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    layout: {
+                        // เผื่อพื้นที่ด้านบนให้ DataLabel แนวตั้ง ไม่โดนตัด
+                        padding: { top: 35 } 
+                    },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false // ชี้ที่แกน x แล้วแสดง tooltip ของทุกหมวดหมู่รวมกัน
+                    },
                     plugins: { 
                         legend: { display: false },
-                        datalabels: { display: false }
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += new Intl.NumberFormat('th-TH').format(context.parsed.y) + ' ฿';
+                                    }
+                                    return label;
+                                },
+                                footer: function(tooltipItems) {
+                                    // รวมยอดตอนแสดง Tooltip ด้านล่างสุด
+                                    let total = 0;
+                                    tooltipItems.forEach(function(tooltipItem) {
+                                        total += tooltipItem.parsed.y;
+                                    });
+                                    return 'ยอดรวม: ' + new Intl.NumberFormat('th-TH').format(total) + ' ฿';
+                                }
+                            }
+                        },
+                        datalabels: {
+                            display: function(context) {
+                                // ตรรกะให้แสดงยอดรวมบนสุดแค่ครั้งเดียว (หา dataset สุดท้ายที่มีค่า)
+                                const dataIndex = context.dataIndex;
+                                const datasets = context.chart.data.datasets;
+                                let lastVisibleIndex = -1;
+                                for (let i = datasets.length - 1; i >= 0; i--) {
+                                    if (datasets[i].data[dataIndex] > 0) {
+                                        lastVisibleIndex = i;
+                                        break;
+                                    }
+                                }
+                                return context.datasetIndex === lastVisibleIndex && context.dataset.data[dataIndex] > 0;
+                            },
+                            formatter: function(value, context) {
+                                const dataIndex = context.dataIndex;
+                                let total = 0;
+                                context.chart.data.datasets.forEach(ds => {
+                                    total += ds.data[dataIndex] || 0;
+                                });
+                                // คืนค่าเป็นตัวเลขยอดรวม จัดฟอร์แมตมีจุลภาค
+                                return total.toLocaleString('th-TH');
+                            },
+                            anchor: 'end',
+                            align: 'end',
+                            rotation: -90, // หมุนเป็นแนวตั้ง
+                            color: '#475569',
+                            font: {
+                                weight: 'bold',
+                                size: 10
+                            },
+                            offset: 4
+                        }
                     },
                     scales: {
-                        y: { beginAtZero: true, grid: { borderDash: [4, 4] } },
-                        x: { grid: { display: false } }
+                        x: { 
+                            stacked: true, 
+                            grid: { display: false } 
+                        },
+                        y: { 
+                            stacked: true, 
+                            beginAtZero: true, 
+                            grid: { borderDash: [4, 4] } 
+                        }
                     }
                 }
             });
 
             // --- Render Donut Chart ---
-            const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
-            const catLabels = sortedCategories.map(item => item[0]);
-            const catData = sortedCategories.map(item => item[1]);
-            const catColors = catLabels.map((label, index) => getCategoryColor(label, index));
-
             if (donutChartInstance) donutChartInstance.destroy();
             const pieCtx = document.getElementById('expenseChart').getContext('2d');
             donutChartInstance = new Chart(pieCtx, {
@@ -822,7 +899,8 @@
             if (sortedCategories.length === 0) {
                 catListDiv.innerHTML = '<p class="text-sm text-gray-400 italic text-center">ไม่มีรายการใช้จ่าย</p>';
             } else {
-                sortedCategories.forEach(([cat, amt], index) => {
+                sortedCategories.forEach((cat, index) => {
+                    const amt = categoryTotals[cat];
                     const percent = currentExpense > 0 ? ((amt / currentExpense) * 100).toFixed(1) : 0;
                     catListDiv.innerHTML += `
                         <div class="flex justify-between items-center text-sm p-1.5 hover:bg-gray-50 rounded-lg transition-colors">
