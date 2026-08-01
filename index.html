@@ -243,7 +243,8 @@
             'จ่ายหนี้บัตร/คืนเงิน': '#e34948',  
             'ผ่อนบ้าน/คอนโด': '#64748b',       
             'โรงแรม/ที่พัก': '#14b8a6',       
-            'ประกันรถยนต์': '#8b5cf6',        
+            'ประกันรถยนต์': '#8b5cf6',
+            'การลงทุน': '#0ea5e9', 
             'อื่นๆ': '#a8a6a0'                
         };
         const fallbackColors = ['#2a78d6', '#eb6834', '#eda100', '#1baf7a', '#e87ba4', '#4a3aa7', '#008300', '#e34948', '#64748b', '#a8a6a0'];
@@ -277,6 +278,7 @@
                 { value: 'โรงแรม/ที่พัก', text: 'โรงแรม/ที่พัก' },
                 { value: 'ประกันรถยนต์', text: 'ประกันรถยนต์' },
                 { value: 'จ่ายหนี้บัตร/คืนเงิน', text: '💳 จ่ายหนี้/คืนเงินกู้' },
+                { value: 'การลงทุน', text: '📈 การลงทุน/ซื้อสินทรัพย์' }, 
                 { value: 'อื่นๆ', text: 'อื่นๆ' }
             ],
             income: [
@@ -348,15 +350,18 @@
             }
         }
 
+        // --- แก้ไขการจัดการ Class เวลากดสลับมุมมอง ---
         function setViewMode(mode) {
             currentViewMode = mode;
             document.querySelectorAll('.view-btn').forEach(btn => {
                 if(btn.dataset.mode === mode) {
-                    btn.classList.add('bg-blue-600', 'text-white', 'shadow-md');
-                    btn.classList.remove('bg-transparent', 'text-gray-600');
+                    // ปุ่มที่ถูกเลือก: ใส่สีฟ้า และเอาคลาส hover:bg-gray-100 ออก เพื่อแก้ปัญหาบั๊กสีทับกัน
+                    btn.classList.add('bg-blue-600', 'text-white', 'shadow-md', 'font-bold');
+                    btn.classList.remove('bg-transparent', 'text-gray-600', 'hover:bg-gray-100', 'font-medium');
                 } else {
-                    btn.classList.remove('bg-blue-600', 'text-white', 'shadow-md');
-                    btn.classList.add('bg-transparent', 'text-gray-600');
+                    // ปุ่มที่ไม่ถูกเลือก: โปร่งใส และใส่ hover:bg-gray-100 กลับเข้าไป
+                    btn.classList.remove('bg-blue-600', 'text-white', 'shadow-md', 'font-bold');
+                    btn.classList.add('bg-transparent', 'text-gray-600', 'hover:bg-gray-100', 'font-medium');
                 }
             });
             renderDashboard();
@@ -535,7 +540,7 @@
             container.innerHTML = html;
         }
 
-        // ฟังค์ชันสำหรับวาดตาราง Transaction โดยอ้างอิงจาก Filter
+        // --- แก้ไขส่วนตาราง Transaction เพื่อแสดงวันที่แทนลูกศร ---
         function renderTransactionList() {
             const transDiv = document.getElementById('transactionDetails');
             transDiv.innerHTML = '';
@@ -549,24 +554,34 @@
             if (displayData.length === 0) {
                 transDiv.innerHTML = '<div class="text-center p-6 text-gray-400 text-sm">ไม่มีรายการในหมวดนี้</div>';
             } else {
+                const mNamesShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+                
                 displayData.forEach(row => {
                     const isIncome = row.type === 'income';
                     const amountStr = isIncome ? `+฿${parseFloat(row.amount).toLocaleString('th-TH')}` : `-฿${parseFloat(row.amount).toLocaleString('th-TH')}`;
                     const amountColor = isIncome ? 'text-green-600' : 'text-red-500';
-                    const icon = isIncome ? '<i class="fa-solid fa-arrow-down text-green-500"></i>' : '<i class="fa-solid fa-arrow-up text-red-400"></i>';
                     
                     const d = parseRowDate(row.date);
-                    const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth()+1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
+                    const day = d.getDate().toString();
+                    const monthStr = mNamesShort[d.getMonth()];
+                    
+                    // สร้างไอคอนเป็นวันที่และเดือน
+                    const dateIcon = `
+                        <div class="flex flex-col items-center justify-center leading-none">
+                            <span class="text-[14px] font-bold text-gray-700">${day}</span>
+                            <span class="text-[10px] text-gray-500 mt-0.5">${monthStr}</span>
+                        </div>
+                    `;
                     
                     transDiv.innerHTML += `
                         <div onclick="editRecord(${row.sheetRow})" class="transaction-row flex justify-between items-center p-3 bg-gray-50 rounded-xl hover:bg-gray-100 cursor-pointer border border-transparent hover:border-gray-200 transition-all">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-gray-100">
-                                    ${icon}
+                                <div class="w-11 h-11 rounded-xl bg-white flex items-center justify-center shadow-sm border border-gray-100 flex-shrink-0">
+                                    ${dateIcon}
                                 </div>
                                 <div>
                                     <p class="text-sm font-bold text-gray-800 leading-tight">${row.category}</p>
-                                    <p class="text-[11px] text-gray-500 mt-0.5 line-clamp-1">${dateStr} • ${row.user || ''} ${row.note ? '• '+row.note : ''}</p>
+                                    <p class="text-[11px] text-gray-500 mt-0.5 line-clamp-1">${row.user || ''} ${row.note ? '• '+row.note : ''}</p>
                                 </div>
                             </div>
                             <span class="font-bold text-sm ${amountColor}">${amountStr}</span>
